@@ -8,7 +8,7 @@ Each coin is a pet that has to be fed.
 - **Hunger** grows as the timer runs down. The hungrier the coin, the closer a seller's payout moves from the curve price toward a plain pro-rata share of the pool.
 - **Death** comes when the timer hits zero. Trading stops. Every holder burns their tokens for a pro-rata share of what is left. The creator's seed tokens are claim-only, and that claim is cut in half. The other half goes to the protocol.
 
-This repository is a testnet prototype. The same author also builds [NearPocket](https://github.com/mozoraID/nearpocket), a separate project with no shared code.
+This repository is a testnet prototype.
 
 ## The mechanic
 
