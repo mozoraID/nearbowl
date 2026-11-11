@@ -1,0 +1,13 @@
+/target
+**/*.wasm
+.env
+.env.local
+.env.*.local
+credentials/
+*.key
+web/node_modules
+web/.next
+web/out
+web/tsconfig.tsbuildinfo
+scripts/node_modules
+.DS_Store

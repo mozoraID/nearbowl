@@ -1,0 +1,71 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  rust:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: 1.99.1
+          targets: wasm32-unknown-unknown
+          components: clippy, rustfmt
+      - name: OpenSSL headers for sandbox tests
+        run: sudo apt-get update && sudo apt-get install -y libssl-dev pkg-config
+      - name: Format
+        run: cargo fmt --all --check
+      - name: Clippy
+        run: cargo clippy --workspace --all-targets -- -D warnings
+      - name: Unit tests
+        run: cargo test --workspace --exclude nearbowl-sandbox
+      - name: Contract wasm
+        run: bash scripts/build-contracts.sh
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: scripts/package-lock.json
+      - name: Script dependencies
+        working-directory: scripts
+        run: npm ci
+      - name: Sandbox tests
+        run: cargo test -p nearbowl-sandbox -- --test-threads=1
+      - name: Refuse mainnet demo controls
+        run: |
+          if NEAR_NETWORK_ID=mainnet node scripts/deploy-testnet.mjs; then
+            echo "mainnet deploy was not refused"
+            exit 1
+          fi
+
+  python:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Reference math
+        run: python3 sim/sim.py
+
+  web:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: web
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+      - run: npm ci
+      - run: npm run lint
+      - run: npm run typecheck
+      - run: npm run build
+        env:
+          NEXT_PUBLIC_NEAR_NETWORK: testnet
+          NEXT_PUBLIC_RPC_URL: https://rpc.testnet.near.org
+          NEXT_PUBLIC_FACTORY_ACCOUNT_ID: factory.nearbowl.testnet
+          NEXT_PUBLIC_USDC_ACCOUNT_ID: tusdc.nearbowl.testnet
