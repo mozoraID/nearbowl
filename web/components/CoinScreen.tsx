@@ -2,50 +2,72 @@
 
 import { FaucetButton } from "@/components/FaucetButton";
 import { Pet } from "@/components/Pet";
+import { TimeRing } from "@/components/TimeRing";
+import { useToast } from "@/components/Toast";
 import { useWallet } from "@/components/Wallet";
 import { config, TRADE_STORAGE_YOCTO, USDC_STORAGE_YOCTO } from "@/lib/config";
 import { humanError } from "@/lib/errors";
-import { formatDuration, formatTokens, formatUsdc, hungerPercent, lifespan, parseTokenFraction, parseUsdc } from "@/lib/format";
+import { accountUrl, txUrl } from "@/lib/explorer";
+import {
+  formatAgo,
+  formatDuration,
+  formatTokens,
+  formatUsdc,
+  hungerPercent,
+  lifespan,
+  marketCapRaw,
+  moodLabel,
+  parseTokenFraction,
+  parseUsdc,
+  petMood,
+  shortAccount,
+} from "@/lib/format";
 import { view } from "@/lib/near";
 import type { CoinView, PositionView, QuoteBuy, QuoteClaim, QuoteSell, StorageView, TradeView } from "@/lib/types";
-import { useEffect, useRef, useState } from "react";
+import Link from "next/link";
+import { useEffect, useState } from "react";
 
 export function CoinScreen({ id }: { id: string }) {
+  const coinId = Number(id);
+  const validId = Number.isInteger(coinId) && coinId >= 0;
   const { accountId, call, connect } = useWallet();
+  const push = useToast();
   const [coin, setCoin] = useState<CoinView | null>(null);
   const [position, setPosition] = useState<PositionView | null>(null);
   const [trades, setTrades] = useState<TradeView[]>([]);
   const [error, setError] = useState<string | null>(null);
-  const [notice, setNotice] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
   const [buyAmount, setBuyAmount] = useState("10");
   const [sellPercent, setSellPercent] = useState(100);
   const [buyQuote, setBuyQuote] = useState<QuoteBuy | null>(null);
+  const [buyError, setBuyError] = useState<string | null>(null);
   const [sellQuote, setSellQuote] = useState<QuoteSell | null>(null);
+  const [sellError, setSellError] = useState<string | null>(null);
   const [claimQuote, setClaimQuote] = useState<QuoteClaim | null>(null);
   const [remaining, setRemaining] = useState(0n);
   const [pulse, setPulse] = useState(false);
-  const seenDeadline = useRef<string | null>(null);
+  const [revision, setRevision] = useState(0);
 
   useEffect(() => {
+    if (!validId) return;
     let stop = false;
     const load = () => {
-      view<CoinView>(config.factoryAccountId, "get_coin", { coin_id: Number(id) })
+      view<CoinView>(config.factoryAccountId, "get_coin", { coin_id: coinId })
         .then((next) => {
           if (stop) return;
-          setCoin(next);
+          setCoin((prev) => {
+            if (prev && BigInt(next.deadline_ns) > BigInt(prev.deadline_ns)) {
+              window.setTimeout(() => setPulse(true), 0);
+              window.setTimeout(() => setPulse(false), 800);
+            }
+            return next;
+          });
           setError(null);
-          const prev = seenDeadline.current;
-          if (prev && BigInt(next.deadline_ns) > BigInt(prev)) {
-            setPulse(true);
-            window.setTimeout(() => setPulse(false), 800);
-          }
-          seenDeadline.current = next.deadline_ns;
         })
         .catch((err: unknown) => {
           if (!stop) setError(humanError(err));
         });
-      view<TradeView[]>(config.factoryAccountId, "get_recent_trades", { coin_id: Number(id) })
+      view<TradeView[]>(config.factoryAccountId, "get_recent_trades", { coin_id: coinId })
         .then((rows) => {
           if (!stop) setTrades(rows);
         })
@@ -57,13 +79,13 @@ export function CoinScreen({ id }: { id: string }) {
       stop = true;
       window.clearInterval(timer);
     };
-  }, [id]);
+  }, [coinId, revision, validId]);
 
   useEffect(() => {
     if (!coin) return;
-    setRemaining(BigInt(coin.remaining_ns));
-    const started = Date.now();
     const base = BigInt(coin.remaining_ns);
+    const started = Date.now();
+    setRemaining(base);
     const timer = window.setInterval(() => {
       const elapsed = BigInt(Date.now() - started) * 1_000_000n;
       setRemaining(base > elapsed ? base - elapsed : 0n);
@@ -72,93 +94,170 @@ export function CoinScreen({ id }: { id: string }) {
   }, [coin]);
 
   useEffect(() => {
-    if (!accountId) {
+    if (!coin) return;
+    document.title = `${coin.name} (${coin.symbol}) · NearBowl`;
+    return () => {
+      document.title = "NearBowl";
+    };
+  }, [coin]);
+
+  useEffect(() => {
+    if (!accountId || !validId) {
       setPosition(null);
       return;
     }
-    view<PositionView>(config.factoryAccountId, "get_position", { coin_id: Number(id), account_id: accountId })
-      .then(setPosition)
-      .catch(() => setPosition(null));
-  }, [accountId, id, coin?.supply]);
+    let stop = false;
+    view<PositionView>(config.factoryAccountId, "get_position", { coin_id: coinId, account_id: accountId })
+      .then((row) => {
+        if (!stop) setPosition(row);
+      })
+      .catch(() => {
+        if (!stop) setPosition(null);
+      });
+    return () => {
+      stop = true;
+    };
+  }, [accountId, coinId, coin?.supply, coin?.seed_tokens, validId, revision]);
+
+  const clockDead = remaining === 0n;
 
   useEffect(() => {
-    if (!coin || coin.status === "dead") {
+    if (!coin || coin.status === "dead" || clockDead) {
       setBuyQuote(null);
+      setBuyError(null);
       return;
     }
     const raw = parseUsdc(buyAmount);
-    if (!raw || raw === "0") {
+    if (raw === null) {
       setBuyQuote(null);
+      setBuyError(buyAmount.trim() ? "Use a USDC amount with up to 6 decimals." : null);
       return;
     }
+    if (raw === "0") {
+      setBuyQuote(null);
+      setBuyError(null);
+      return;
+    }
+    let stop = false;
     const handle = window.setTimeout(() => {
       view<QuoteBuy>(config.factoryAccountId, "quote_buy", {
-        coin_id: Number(id),
+        coin_id: coinId,
         usdc_in: raw,
         account_id: accountId ?? config.factoryAccountId,
       })
-        .then(setBuyQuote)
-        .catch(() => setBuyQuote(null));
-    }, 250);
-    return () => window.clearTimeout(handle);
-  }, [buyAmount, coin, id, accountId]);
+        .then((quote) => {
+          if (stop) return;
+          setBuyQuote(quote);
+          setBuyError(null);
+        })
+        .catch((err: unknown) => {
+          if (stop) return;
+          setBuyQuote(null);
+          setBuyError(humanError(err));
+        });
+    }, 300);
+    return () => {
+      stop = true;
+      window.clearTimeout(handle);
+    };
+  }, [buyAmount, coin, coinId, accountId, clockDead]);
 
   useEffect(() => {
-    if (!coin || coin.status === "dead" || !position || position.balance === "0") {
+    if (!coin || coin.status === "dead" || clockDead || !position || position.balance === "0") {
       setSellQuote(null);
+      setSellError(null);
       return;
     }
     const tokens = parseTokenFraction(position.balance, sellPercent);
     if (tokens === "0") {
       setSellQuote(null);
+      setSellError(null);
       return;
     }
-    view<QuoteSell>(config.factoryAccountId, "quote_sell", { coin_id: Number(id), tokens_in: tokens })
-      .then(setSellQuote)
-      .catch(() => setSellQuote(null));
-  }, [coin, id, position, sellPercent, remaining]);
+    let stop = false;
+    const handle = window.setTimeout(() => {
+      view<QuoteSell>(config.factoryAccountId, "quote_sell", { coin_id: coinId, tokens_in: tokens })
+        .then((quote) => {
+          if (stop) return;
+          setSellQuote(quote);
+          setSellError(null);
+        })
+        .catch((err: unknown) => {
+          if (stop) return;
+          setSellQuote(null);
+          setSellError(humanError(err));
+        });
+    }, 300);
+    return () => {
+      stop = true;
+      window.clearTimeout(handle);
+    };
+  }, [coin, coinId, position, sellPercent, clockDead]);
 
   useEffect(() => {
-    if (!accountId) return;
-    view<QuoteClaim>(config.factoryAccountId, "quote_claim", { coin_id: Number(id), account_id: accountId })
-      .then(setClaimQuote)
-      .catch(() => setClaimQuote(null));
-  }, [accountId, id, coin?.status, coin?.reserve]);
+    if (!accountId || !validId) {
+      setClaimQuote(null);
+      return;
+    }
+    let stop = false;
+    view<QuoteClaim>(config.factoryAccountId, "quote_claim", { coin_id: coinId, account_id: accountId })
+      .then((quote) => {
+        if (!stop) setClaimQuote(quote);
+      })
+      .catch(() => {
+        if (!stop) setClaimQuote(null);
+      });
+    return () => {
+      stop = true;
+    };
+  }, [accountId, coinId, coin?.status, coin?.reserve, validId, revision]);
 
-  async function ensureReady() {
+  async function ensureReady(): Promise<boolean> {
     if (!accountId) {
       connect();
-      throw new Error("Connect a wallet first.");
+      return false;
     }
     const usdcStorage = await view<StorageView | null>(config.usdcAccountId, "storage_balance_of", { account_id: accountId });
     if (!usdcStorage) {
-      await call(config.usdcAccountId, "storage_deposit", { account_id: accountId }, USDC_STORAGE_YOCTO, "40000000000000");
-      throw new Error("Registered on USDC. Try the trade again in a moment.");
+      const result = await call(config.usdcAccountId, "storage_deposit", { account_id: accountId }, USDC_STORAGE_YOCTO, "40000000000000");
+      push({
+        tone: "ok",
+        title: "Registered on USDC",
+        detail: "Try the trade again in a moment.",
+        href: result.txHash ? txUrl(result.txHash) : undefined,
+      });
+      return false;
     }
     const factoryStorage = await view<StorageView | null>(config.factoryAccountId, "storage_balance_of", { account_id: accountId });
     if (!factoryStorage || BigInt(factoryStorage.available) < 2_000_000_000_000_000_000_000n) {
-      await call(config.factoryAccountId, "storage_deposit", {}, TRADE_STORAGE_YOCTO, "40000000000000");
-      throw new Error("Deposited storage for your position. Try the trade again in a moment.");
+      const result = await call(config.factoryAccountId, "storage_deposit", {}, TRADE_STORAGE_YOCTO, "40000000000000");
+      push({
+        tone: "ok",
+        title: "Storage deposited",
+        detail: "Your position has room now. Try the trade again in a moment.",
+        href: result.txHash ? txUrl(result.txHash) : undefined,
+      });
+      return false;
     }
+    return true;
   }
 
   async function buy() {
     const raw = parseUsdc(buyAmount);
     if (!raw) {
-      setNotice("Enter a USDC amount with up to 6 decimals.");
+      setBuyError("Enter a USDC amount with up to 6 decimals.");
       return;
     }
     setPending(true);
-    setNotice(null);
     try {
-      await ensureReady();
+      if (!(await ensureReady())) return;
       const quote = await view<QuoteBuy>(config.factoryAccountId, "quote_buy", {
-        coin_id: Number(id),
+        coin_id: coinId,
         usdc_in: raw,
         account_id: accountId,
       });
       const minOut = (BigInt(quote.tokens_out) * 98n) / 100n;
-      await call(
+      const result = await call(
         config.usdcAccountId,
         "ft_transfer_call",
         {
@@ -170,9 +269,15 @@ export function CoinScreen({ id }: { id: string }) {
         "1",
         "200000000000000",
       );
-      setNotice(`Fed. About ${formatTokens(quote.tokens_out)} tokens and ${formatDuration(BigInt(quote.extension_ns))} added, if the quote held.`);
+      push({
+        tone: "ok",
+        title: "Feed sent",
+        detail: `About ${formatTokens(quote.tokens_out)} tokens and ${formatDuration(BigInt(quote.extension_ns))} added, if the quote held.`,
+        href: result.txHash ? txUrl(result.txHash) : undefined,
+      });
+      setRevision((value) => value + 1);
     } catch (err) {
-      setNotice(humanError(err));
+      push({ tone: "err", title: "Buy failed", detail: humanError(err) });
     } finally {
       setPending(false);
     }
@@ -182,38 +287,48 @@ export function CoinScreen({ id }: { id: string }) {
     if (!position) return;
     const tokens = parseTokenFraction(position.balance, sellPercent);
     setPending(true);
-    setNotice(null);
     try {
-      await ensureReady();
-      const quote = await view<QuoteSell>(config.factoryAccountId, "quote_sell", { coin_id: Number(id), tokens_in: tokens });
+      if (!(await ensureReady())) return;
+      const quote = await view<QuoteSell>(config.factoryAccountId, "quote_sell", { coin_id: coinId, tokens_in: tokens });
       const minOut = (BigInt(quote.usdc_out_net) * 98n) / 100n;
-      await call(
+      const result = await call(
         config.factoryAccountId,
         "sell",
-        { coin_id: Number(id), tokens_in: tokens, min_usdc_out: minOut.toString() },
+        { coin_id: coinId, tokens_in: tokens, min_usdc_out: minOut.toString() },
         "1",
         "80000000000000",
       );
-      setNotice("Sale sent. USDC arrives after the transfer confirms.");
+      push({
+        tone: "ok",
+        title: "Sale sent",
+        detail: "USDC arrives after the transfer confirms.",
+        href: result.txHash ? txUrl(result.txHash) : undefined,
+      });
+      setRevision((value) => value + 1);
     } catch (err) {
-      setNotice(humanError(err));
+      push({ tone: "err", title: "Sell failed", detail: humanError(err) });
     } finally {
       setPending(false);
     }
   }
 
   async function claim() {
+    if (!accountId) {
+      connect();
+      return;
+    }
     setPending(true);
-    setNotice(null);
     try {
-      if (!accountId) {
-        connect();
-        return;
-      }
-      await call(config.factoryAccountId, "claim", { coin_id: Number(id) }, "1", "80000000000000");
-      setNotice("Claim sent. This is a share of what is left in the pool, not a refund.");
+      const result = await call(config.factoryAccountId, "claim", { coin_id: coinId }, "1", "80000000000000");
+      push({
+        tone: "ok",
+        title: "Claim sent",
+        detail: "This is a share of what is left in the pool, not a refund.",
+        href: result.txHash ? txUrl(result.txHash) : undefined,
+      });
+      setRevision((value) => value + 1);
     } catch (err) {
-      setNotice(humanError(err));
+      push({ tone: "err", title: "Claim failed", detail: humanError(err) });
     } finally {
       setPending(false);
     }
@@ -221,151 +336,311 @@ export function CoinScreen({ id }: { id: string }) {
 
   async function withdrawFees() {
     setPending(true);
-    setNotice(null);
     try {
-      await call(config.factoryAccountId, "withdraw_creator_fees", { coin_id: Number(id) }, "1", "80000000000000");
-      setNotice("Fee withdrawal sent.");
+      const result = await call(config.factoryAccountId, "withdraw_creator_fees", { coin_id: coinId }, "1", "80000000000000");
+      push({
+        tone: "ok",
+        title: "Fee withdrawal sent",
+        href: result.txHash ? txUrl(result.txHash) : undefined,
+      });
+      setRevision((value) => value + 1);
     } catch (err) {
-      setNotice(humanError(err));
+      push({ tone: "err", title: "Withdrawal failed", detail: humanError(err) });
     } finally {
       setPending(false);
     }
   }
 
-  if (error) {
-    return <div className="card error" role="alert"><p>{error}</p></div>;
-  }
-  if (!coin) {
-    return <div className="skeleton" aria-busy="true" aria-label="Loading coin" />;
+  if (!validId) {
+    return (
+      <div className="page page-pad">
+        <div className="card error-card" role="alert">
+          <h1>That coin link does not look right</h1>
+          <Link className="solid" href="/">
+            Back to the bowl
+          </Link>
+        </div>
+      </div>
+    );
   }
 
-  const locallyDead = coin.status === "dead" || remaining === 0n;
-  const mood = locallyDead ? "dead" : coin.w_n === 0 ? "fed" : "hungry";
+  if (error && !coin) {
+    return (
+      <div className="page page-pad">
+        <div className="card error-card" role="alert">
+          <h1>Could not load this coin</h1>
+          <p>{error}</p>
+          <Link className="solid" href="/">
+            Back to the bowl
+          </Link>
+        </div>
+      </div>
+    );
+  }
+
+  if (!coin) {
+    return (
+      <div className="page page-pad" aria-busy="true" aria-label="Loading coin">
+        <div className="skeleton skeleton-hero" />
+        <div className="skeleton-row">
+          <div className="skeleton skeleton-card" />
+          <div className="skeleton skeleton-card" />
+        </div>
+      </div>
+    );
+  }
+
+  const locallyDead = coin.status === "dead" || clockDead;
+  const mood = petMood(coin.status, coin.w_n, clockDead);
   const fullness = locallyDead ? 0 : 100 - hungerPercent(coin.w_n);
+  const pool = coin.status === "dead" ? coin.snapshot_reserve : coin.reserve;
+  const cap = BigInt(coin.max_life_ns || "0");
 
   return (
-    <div className="split">
-      <section className="card">
-        <div className="coin-head">
+    <div className="page page-pad">
+      <p className="back-link">
+        <Link className="text-link" href="/">
+          All coins
+        </Link>
+      </p>
+      <div className="coin-layout">
+        <section className="card coin-stage">
+          <Pet mood={mood} size="lg" pulse={pulse} />
           <div>
             <div className="symbol">{coin.symbol}</div>
-            <h2>{coin.name}</h2>
-            <p className="hint">by {coin.creator_id}</p>
+            <h1>{coin.name}</h1>
+            <p className="hint">
+              by{" "}
+              <a href={accountUrl(coin.creator_id)} target="_blank" rel="noreferrer">
+                {coin.creator_id}
+              </a>
+            </p>
+            <span className={`mood mood-${mood}`}>{moodLabel(mood)}</span>
+            <div className="timer-block">
+              <TimeRing remaining={remaining} cap={cap} dead={locallyDead} />
+              <div>
+                <p className="timer-kicker">{locallyDead ? "Timer finished" : "Time left"}</p>
+                <p className="timer-value">{locallyDead ? "0s" : formatDuration(remaining)}</p>
+                <p className="hint">Life cap {formatDuration(cap)}</p>
+              </div>
+            </div>
+            <div
+              className={`meter${mood === "hungry" || mood === "starving" ? " is-low" : ""}`}
+              role="meter"
+              aria-valuenow={fullness}
+              aria-valuemin={0}
+              aria-valuemax={100}
+              aria-label="How full the bowl is"
+            >
+              <span style={{ width: `${fullness}%` }} />
+            </div>
+            <p className="hint">Hunger {locallyDead ? 100 : hungerPercent(coin.w_n)}%. Selling pays closer to a pro-rata share as this rises.</p>
+            {locallyDead ? <p className="epitaph">Lived {lifespan(coin.launched_ns, coin.deadline_ns)}. A share of what is left, not a refund.</p> : null}
           </div>
-          <Pet mood={mood} pulse={pulse} />
-        </div>
-        <div className="timer-row">
-          <span className={`mood ${mood}`}>{mood === "fed" ? "Fed" : mood === "hungry" ? "Hungry" : "Gone"}</span>
-          <strong>{locallyDead ? "0s" : formatDuration(remaining)}</strong>
-        </div>
-        <div className={`meter ${mood === "hungry" ? "hungry" : ""}`} role="meter" aria-valuenow={fullness} aria-valuemin={0} aria-valuemax={100} aria-label="How full the bowl is">
-          <span style={{ width: `${fullness}%` }} />
-        </div>
-        <div className="stats" style={{ marginTop: 12 }}>
-          <span>Price <b className="price">{formatUsdc(coin.price)}</b></span>
-          <span>Pool <b>{formatUsdc(locallyDead ? coin.snapshot_reserve || coin.reserve : coin.reserve)} USDC</b></span>
-          <span>Supply <b>{formatTokens(coin.supply)}</b></span>
-          <span>Hunger <b>{locallyDead ? "100" : hungerPercent(coin.w_n)}%</b></span>
-          <span>Feeders <b>{coin.feeders_count}</b></span>
-          <span>Cap <b>{formatDuration(BigInt(coin.max_life_ns))}</b></span>
-        </div>
-        {locallyDead && (
-          <p className="epitaph">Lived {lifespan(coin.launched_ns, coin.deadline_ns)}. A share of what is left in the pool, not a refund.</p>
-        )}
-      </section>
+        </section>
 
-      <section className="trade-grid">
-        {!locallyDead && (
-          <form className="card form" onSubmit={(event) => { event.preventDefault(); void buy(); }}>
-            <h3>Feed</h3>
-            <label>
-              USDC
-              <input inputMode="decimal" value={buyAmount} onChange={(event) => setBuyAmount(event.target.value)} />
-            </label>
-            <div className="quote" aria-live="polite">
-              {buyQuote ? (
-                <>
-                  <div>You receive about <b>{formatTokens(buyQuote.tokens_out)}</b> tokens</div>
-                  <div>Adds <b>{formatDuration(BigInt(buyQuote.extension_ns))}</b> · timer becomes {formatDuration(BigInt(buyQuote.new_remaining_ns))}</div>
-                </>
-              ) : (
-                <span className="hint">Enter an amount of at least 1 USDC to feed the timer.</span>
-              )}
-            </div>
-            <FaucetButton />
-            <button className="solid" disabled={pending} type="submit">{pending ? "Sending…" : accountId ? "Buy" : "Connect to buy"}</button>
-          </form>
-        )}
+        <section className="card position-card">
+          <h2>Your position</h2>
+          {accountId ? (
+            <>
+              <dl className="metric-grid">
+                <div>
+                  <dt>Tradable</dt>
+                  <dd>{position ? formatTokens(position.balance) : "—"}</dd>
+                </div>
+                <div>
+                  <dt>Seed</dt>
+                  <dd>{position?.is_creator ? formatTokens(position.seed_tokens) : "0"}</dd>
+                </div>
+                <div>
+                  <dt>Selling now</dt>
+                  <dd>{locallyDead ? "Closed" : sellQuote ? `${formatUsdc(sellQuote.usdc_out_net)} USDC` : position && position.balance !== "0" ? "…" : "—"}</dd>
+                </div>
+                <div>
+                  <dt>{locallyDead ? "Claim now" : "If it died now"}</dt>
+                  <dd>{claimQuote ? `${formatUsdc(claimQuote.usdc_out)} USDC` : "—"}</dd>
+                </div>
+              </dl>
+              {claimQuote && claimQuote.haircut !== "0" ? <p className="hint">Haircut to the protocol {formatUsdc(claimQuote.haircut)} USDC. Seed tokens cannot be sold.</p> : null}
+              {!locallyDead && sellQuote ? (
+                <p className="hint">
+                  Curve would pay {formatUsdc(sellQuote.curve_value)} before fees. Pro-rata is {formatUsdc(sellQuote.prorata_value)}. Hunger is {(sellQuote.w_n / 64).toFixed(3)}.
+                </p>
+              ) : null}
+              {position && position.balance === "0" && !position.is_creator ? <p className="hint">You do not hold this coin yet. A buy of at least 1 USDC feeds the timer.</p> : null}
+              {position && BigInt(position.bucket_ns || "0") > 0n ? <p className="hint">Feeding bucket still holds {formatDuration(BigInt(position.bucket_ns))}, so the next buy may add less time.</p> : null}
+            </>
+          ) : (
+            <p>Connect a wallet to see your tokens, what selling would pay, and what a death claim would pay.</p>
+          )}
+        </section>
 
-        {!locallyDead && (
-          <form className="card form" onSubmit={(event) => { event.preventDefault(); void sell(); }}>
-            <h3>Sell</h3>
-            <p className="hint">Balance {position ? formatTokens(position.balance) : "—"}</p>
-            <div className="row-buttons">
-              {[25, 50, 100].map((percent) => (
-                <button type="button" key={percent} className={sellPercent === percent ? "solid" : "ghost"} onClick={() => setSellPercent(percent)}>
-                  {percent}%
-                </button>
-              ))}
-            </div>
-            <div className="quote" aria-live="polite">
-              {sellQuote ? (
-                <>
-                  <div>Hunger {(sellQuote.w_n / 64).toFixed(3)} · you receive <b>{formatUsdc(sellQuote.usdc_out_net)} USDC</b></div>
-                  <div className="hint">Curve {formatUsdc(sellQuote.curve_value)} · pro-rata {formatUsdc(sellQuote.prorata_value)}</div>
-                </>
-              ) : (
-                <span className="hint">Buy some tokens before selling.</span>
-              )}
-            </div>
-            <button className="solid" disabled={pending || !sellQuote} type="submit">Sell</button>
-          </form>
-        )}
+        <div className="trade-stack">
+          {!locallyDead ? (
+            <form
+              className="card form"
+              onSubmit={(event) => {
+                event.preventDefault();
+                void buy();
+              }}
+            >
+              <h2>Feed</h2>
+              <label>
+                USDC
+                <input inputMode="decimal" value={buyAmount} onChange={(event) => setBuyAmount(event.target.value)} />
+              </label>
+              <div className="quote" aria-live="polite">
+                {buyError ? <p className="hint warn">{buyError}</p> : null}
+                {buyQuote ? (
+                  <>
+                    <p>
+                      You receive about <b>{formatTokens(buyQuote.tokens_out)}</b> tokens
+                    </p>
+                    <p>
+                      Adds <b>{formatDuration(BigInt(buyQuote.extension_ns))}</b> · timer becomes {formatDuration(BigInt(buyQuote.new_remaining_ns))}
+                    </p>
+                    <p className="hint">
+                      Fee split: bowl {formatUsdc(buyQuote.fee_split.inherit)}, protocol {formatUsdc(buyQuote.fee_split.protocol)}, creator {formatUsdc(buyQuote.fee_split.creator)}. To the curve {formatUsdc(buyQuote.fee_split.to_curve)}.
+                    </p>
+                    {buyQuote.extension_ns === "0" ? <p className="hint">This buy does not add time. Buys under 1 USDC never feed the timer, and a full feeding bucket adds none.</p> : null}
+                    {!accountId ? <p className="hint">Connect to preview your own feeding cap. This preview uses a fresh bucket.</p> : null}
+                  </>
+                ) : !buyError ? (
+                  <p className="hint">Enter an amount. At least 1 USDC feeds the timer.</p>
+                ) : null}
+              </div>
+              <FaucetButton />
+              <button className="solid" disabled={pending} type="submit">
+                {pending ? "Sending…" : accountId ? "Buy" : "Connect to buy"}
+              </button>
+              <p className="hint">The trade includes a 2% slippage bound. A quote that moves further is rejected.</p>
+            </form>
+          ) : null}
 
-        {locallyDead && (
-          <div className="card form">
-            <h3>Claim</h3>
-            <p>A share of what is left in the pool, not a refund.</p>
-            <div className="quote">
-              {claimQuote ? (
-                <>
-                  <div>You would receive <b>{formatUsdc(claimQuote.usdc_out)} USDC</b></div>
-                  {claimQuote.haircut !== "0" && <div className="hint">Haircut to the protocol {formatUsdc(claimQuote.haircut)} USDC</div>}
-                </>
-              ) : (
-                <span className="hint">Connect to see your share.</span>
-              )}
+          {!locallyDead ? (
+            <form
+              className="card form"
+              onSubmit={(event) => {
+                event.preventDefault();
+                void sell();
+              }}
+            >
+              <h2>Sell</h2>
+              <p className="hint">Tradable balance {position ? formatTokens(position.balance) : "—"}</p>
+              <div className="row-buttons">
+                {[25, 50, 100].map((percent) => (
+                  <button type="button" key={percent} className={sellPercent === percent ? "solid" : "ghost"} aria-pressed={sellPercent === percent} onClick={() => setSellPercent(percent)}>
+                    {percent}%
+                  </button>
+                ))}
+              </div>
+              <div className="quote" aria-live="polite">
+                {sellError ? <p className="hint warn">{sellError}</p> : null}
+                {sellQuote ? (
+                  <p>
+                    You receive <b>{formatUsdc(sellQuote.usdc_out_net)} USDC</b>
+                  </p>
+                ) : !sellError ? (
+                  <p className="hint">Buy some tokens before selling. Seed tokens cannot be sold.</p>
+                ) : null}
+              </div>
+              <button className="ghost sell-btn" disabled={pending || !sellQuote} type="submit">
+                {pending ? "Sending…" : "Sell"}
+              </button>
+            </form>
+          ) : (
+            <div className="card form">
+              <h2>Claim</h2>
+              <p>Trading is closed. A claim pays your share of what is left, not a refund of what you spent.</p>
+              <div className="quote">
+                {claimQuote ? (
+                  <>
+                    <p>
+                      You would receive <b>{formatUsdc(claimQuote.usdc_out)} USDC</b>
+                    </p>
+                    {claimQuote.haircut !== "0" ? <p className="hint">Haircut to the protocol {formatUsdc(claimQuote.haircut)} USDC</p> : null}
+                  </>
+                ) : (
+                  <p className="hint">Connect to see your share.</p>
+                )}
+              </div>
+              <button type="button" className="solid" disabled={pending} onClick={() => void claim()}>
+                {pending ? "Sending…" : accountId ? "Claim" : "Connect to claim"}
+              </button>
             </div>
-            <button className="solid" disabled={pending} onClick={() => void claim()}>Claim</button>
-          </div>
-        )}
+          )}
 
-        {accountId && accountId === coin.creator_id && (
-          <div className="card">
-            <h3>Creator fees</h3>
-            <p>{formatUsdc(coin.creator_fees_owed)} USDC ready to withdraw.</p>
-            <p className="hint">Seed tokens still claim-only: {formatTokens(coin.seed_tokens)}</p>
-            <button className="ghost" disabled={pending || coin.creator_fees_owed === "0"} onClick={() => void withdrawFees()}>
-              Withdraw fees
-            </button>
-          </div>
-        )}
-      </section>
-
-      <section className="card" style={{ gridColumn: "1 / -1" }}>
-        <h3>Last trades</h3>
-        {trades.length === 0 && <p className="hint">No trades yet. The first feed will show up here.</p>}
-        <div className="trades">
-          {trades.map((trade, index) => (
-            <div className="trade" key={`${trade.ts}-${index}`}>
-              <span className={`pill ${trade.side}`}>{trade.side}</span>
-              <span>{trade.account_id}</span>
-              <span>{formatUsdc(trade.usdc)} USDC{trade.side === "buy" && trade.ext_s > 0 ? ` · +${trade.ext_s}s` : ""}</span>
+          {accountId && accountId === coin.creator_id ? (
+            <div className="card">
+              <h2>Creator fees</h2>
+              <p>{formatUsdc(coin.creator_fees_owed)} USDC ready to withdraw.</p>
+              <p className="hint">Seed still claim-only: {formatTokens(coin.seed_tokens)}</p>
+              <button type="button" className="ghost" disabled={pending || coin.creator_fees_owed === "0"} onClick={() => void withdrawFees()}>
+                Withdraw fees
+              </button>
             </div>
-          ))}
+          ) : null}
         </div>
-        {notice && <p className="hint" role="status">{notice}</p>}
-      </section>
+
+        <section className="card metrics-card">
+          <h2>Market</h2>
+          <dl className="metric-grid">
+            {locallyDead ? (
+              <div>
+                <dt>Left in the bowl</dt>
+                <dd>{formatUsdc(pool, 2)} USDC</dd>
+              </div>
+            ) : (
+              <div>
+                <dt>Reserve</dt>
+                <dd>{formatUsdc(coin.reserve, 2)} USDC</dd>
+              </div>
+            )}
+            {locallyDead ? null : (
+              <div>
+                <dt>Market cap</dt>
+                <dd>{formatUsdc(marketCapRaw(coin.reserve), 2)} USDC</dd>
+              </div>
+            )}
+            <div>
+              <dt>{locallyDead ? "Last price" : "Price"}</dt>
+              <dd>{formatUsdc(coin.price, 4)} USDC</dd>
+            </div>
+            <div>
+              <dt>{locallyDead ? "Supply at death" : "Supply"}</dt>
+              <dd>{formatTokens(locallyDead ? coin.snapshot_supply : coin.supply)}</dd>
+            </div>
+            <div>
+              <dt>Feeders</dt>
+              <dd>{coin.feeders_count}</dd>
+            </div>
+            <div>
+              <dt>Volume</dt>
+              <dd>{formatUsdc(coin.volume_usdc, 2)} USDC</dd>
+            </div>
+          </dl>
+        </section>
+
+        <section className="card span-2">
+          <h2>Recent trades</h2>
+          {trades.length === 0 ? <p className="hint">No trades yet. The first feed shows up here. The contract keeps a ring of the latest 30.</p> : null}
+          <ul className="trades">
+            {trades.map((trade, index) => (
+              <li className="trade" key={`${trade.ts}-${trade.account_id}-${index}`}>
+                <span className={`pill pill-${trade.side}`}>{trade.side}</span>
+                <a href={accountUrl(trade.account_id)} target="_blank" rel="noreferrer">
+                  {shortAccount(trade.account_id)}
+                </a>
+                <span>
+                  {formatUsdc(trade.usdc)} USDC · {formatTokens(trade.tokens, 4)} tokens
+                  {trade.side === "buy" && trade.ext_s > 0 ? ` · +${trade.ext_s}s` : ""}
+                </span>
+                <time>{formatAgo(trade.ts)}</time>
+              </li>
+            ))}
+          </ul>
+        </section>
+      </div>
     </div>
   );
 }

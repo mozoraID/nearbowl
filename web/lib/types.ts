@@ -78,3 +78,42 @@ export type StorageView = {
   total: string;
   available: string;
 };
+
+export type ParamsView = {
+  fee_bps: number;
+  inherit_bps: number;
+  protocol_bps: number;
+  creator_bps: number;
+  creator_haircut_bps: number;
+  min_trade_usdc: string;
+  min_seed_usdc: string;
+  ext_ns_per_raw_usdc: string;
+  initial_life_ns: string;
+  t_ref_ns: string;
+  twilight_ns: string;
+  twilight_min_factor_bps: number;
+  max_life_min_ns: string;
+  max_life_max_ns: string;
+  r_small: string;
+  r_large: string;
+  tier1_ns: string;
+  tier2_ns: string;
+  leak_bps: number;
+  scar_step_ns: string;
+  launch_storage_min_yocto: string;
+  allow_demo_controls: boolean;
+};
+
+export type ConfigView = {
+  owner_id: string;
+  usdc_account_id: string;
+  params: ParamsView;
+};
+
+export type SolvencyView = {
+  usdc_held: string;
+  reserves: string;
+  creator_fees: string;
+  protocol_fees: string;
+  in_flight: string;
+};

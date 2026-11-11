@@ -46,7 +46,7 @@ w_time = ceil(64 · clamp(1 − T_rem / T_ref, 0, 1)) / 64
 w = max(w_time, scar)
 ```
 
-`T_ref` is the initial life (24 hours in production, 45 seconds in the demo). The scar jumps up to `w_time` immediately and falls by at most 1/64 per recovery step (90 minutes in production, 3 seconds in the demo). Feeding a coin back to full does not instantly restore curve exits.
+`T_ref` is the initial life (24 hours in production, 45 seconds on the short demo timer). The scar jumps up to `w_time` immediately and falls by at most 1/64 per recovery step (90 minutes in production, 3 seconds on the short demo timer). Feeding a coin back to full does not instantly restore curve exits. The short demo timer is the script default and the earlier factory `factory.nearbowl.testnet`. The public factory `bowl.nearbowl.testnet` uses the longer timers in [Deploy to testnet](#deploy-to-testnet).
 
 **Timer.** Only buys extend it. A buy of `G` USDC (at least 1) adds
 
@@ -56,7 +56,7 @@ f = 1                         when time left ≥ twilight
 f = 0.25 + 0.75 · T_rem / T_tw otherwise
 ```
 
-Each account has a leaky bucket. Recent raw seconds leak at 0.25 per second. The next raw seconds are credited at 100% for the first tier, 50% for the second, and 0% after that. One account cannot keep a coin alive by itself. The new remaining time is capped by `max_life(R)`: 24 hours below 1,000 USDC, 72 hours above 100,000 USDC, linear between (180 seconds to 540 seconds on the demo timer).
+Each account has a leaky bucket. Recent raw seconds leak at 0.25 per second. The next raw seconds are credited at 100% for the first tier, 50% for the second, and 0% after that. One account cannot keep a coin alive by itself. The new remaining time is capped by `max_life(R)`: 24 hours below 1,000 USDC, 72 hours above 100,000 USDC, linear between (180 seconds to 540 seconds on the short demo timer).
 
 **Death and claims.** Death is lazy: the next write notices `now ≥ deadline`, snapshots `(R, s)`, and stops trading. A claim pays `floor(R_snap · x / s_snap)`. The creator also claims the seed tokens, then keeps `floor(gross / 2)`. The rest of that gross is a protocol fee. Ignoring fees, the creator breaks even only if the pool is about 4× the seed at death, because `1 / (1 − 0.5)² = 4`.
 
@@ -103,16 +103,46 @@ node scripts/deploy-testnet.mjs
 With `DEPLOYER_ACCOUNT_ID=nearbowl.testnet` the script creates and deploys:
 
 - `tusdc.nearbowl.testnet` — mock USDC, owner is the deployer
-- `factory.nearbowl.testnet` — factory, demo timers, `allow_demo_controls = true`
+- `factory.<deployer>` unless `FACTORY_ACCOUNT_ID` is set — factory, short demo timers unless the timer env vars below are set, `allow_demo_controls = true`
 - `alice.nearbowl.testnet`, `bob.nearbowl.testnet`, `carol.nearbowl.testnet` — demo wallets, same full-access key as the deployer
 
-Running it again updates the wasm and leaves state in place. It refuses to run when `NEAR_NETWORK_ID=mainnet`.
+The public factory is `bowl.nearbowl.testnet`, with the same tUSDC account `tusdc.nearbowl.testnet`. `factory.nearbowl.testnet` is the earlier short-timer demo factory (45 second initial life, 180–540 second cap).
+
+`bowl.nearbowl.testnet` was created with these timer overrides. Other init params are the short-demo defaults (1% fee split 50 / 30 / 20, 3 second scar step, 1 USDC minimum seed, `allow_demo_controls` true).
+
+| Env var | Value | Meaning |
+| --- | --- | --- |
+| `INITIAL_LIFE_NS` | `1800000000000` | 30 minutes |
+| `T_REF_NS` | `1800000000000` | 30 minutes, hunger reference |
+| `MAX_LIFE_MIN_NS` | `3600000000000` | 1 hour cap at or below 1,000 USDC |
+| `MAX_LIFE_MAX_NS` | `10800000000000` | 3 hour cap at or above 100,000 USDC |
+| `TWILIGHT_NS` | `300000000000` | 5 minutes |
+| `EXT_NS_PER_RAW_USDC` | `60000` | 60 seconds of life per USDC |
+| `TIER1_NS` | `600000000000` | 10 minutes |
+| `TIER2_NS` | `600000000000` | 10 minutes |
+
+```bash
+FACTORY_ACCOUNT_ID=bowl.nearbowl.testnet \
+TUSDC_ACCOUNT_ID=tusdc.nearbowl.testnet \
+INITIAL_LIFE_NS=1800000000000 \
+T_REF_NS=1800000000000 \
+MAX_LIFE_MIN_NS=3600000000000 \
+MAX_LIFE_MAX_NS=10800000000000 \
+TWILIGHT_NS=300000000000 \
+EXT_NS_PER_RAW_USDC=60000 \
+TIER1_NS=600000000000 \
+TIER2_NS=600000000000 \
+node scripts/deploy-testnet.mjs
+```
+
+Running the script again updates the wasm and leaves state in place. Timer env vars apply only when the factory account is created. It refuses to run when `NEAR_NETWORK_ID=mainnet`.
 
 ## Demo
 
 ```bash
 set -a && source .env && set +a
-node scripts/demo.mjs
+# demo.mjs assumes the short demo timer. Point it at the earlier factory.
+FACTORY_ACCOUNT_ID=factory.nearbowl.testnet node scripts/demo.mjs
 ```
 
 The script mints tUSDC, launches a coin with 100, has Alice buy 20, Bob buy 30, and Carol buy 50, then pins 30 seconds of life and sells Bob's position. It prints each on-chain number next to the integer value from the reference model. Token amounts and USDC payouts match that model exactly. The on-screen 6-decimal figures in the design notes are the continuous model; the chain is within 0.000001 USDC of those, and claim dust of a few raw units stays in the reserve.
@@ -134,14 +164,14 @@ Vercel needs these public variables:
 | --- | --- |
 | `NEXT_PUBLIC_NEAR_NETWORK` | `testnet` |
 | `NEXT_PUBLIC_RPC_URL` | `https://test.rpc.fastnear.com` |
-| `NEXT_PUBLIC_FACTORY_ACCOUNT_ID` | `factory.nearbowl.testnet` |
+| `NEXT_PUBLIC_FACTORY_ACCOUNT_ID` | `bowl.nearbowl.testnet` |
 | `NEXT_PUBLIC_USDC_ACCOUNT_ID` | `tusdc.nearbowl.testnet` |
 
 The UI has a testnet banner, a tUSDC faucet, Explore (alive coins and a Graveyard), Launch, and a coin page with the timer, hunger meter, quote, buy, sell, claim, and the on-contract trade list.
 
 ## Mainnet
 
-The wasm is the same. Only init config changes.
+The wasm is the same. Only init config changes. The Testnet column is the script's short demo timer, also used by the earlier factory `factory.nearbowl.testnet`. The public factory `bowl.nearbowl.testnet` uses the longer timers in [Deploy to testnet](#deploy-to-testnet).
 
 | | Testnet | Mainnet |
 | --- | --- | --- |

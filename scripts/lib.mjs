@@ -87,6 +87,37 @@ export async function view(rpc, contractId, method, args) {
   return JSON.parse(Buffer.from(body.result.result).toString("utf8"));
 }
 
+const TIMER_ENV = [
+  ["INITIAL_LIFE_NS", "initial_life_ns"],
+  ["T_REF_NS", "t_ref_ns"],
+  ["MAX_LIFE_MIN_NS", "max_life_min_ns"],
+  ["MAX_LIFE_MAX_NS", "max_life_max_ns"],
+  ["TWILIGHT_NS", "twilight_ns"],
+  ["EXT_NS_PER_RAW_USDC", "ext_ns_per_raw_usdc"],
+  ["SCAR_STEP_NS", "scar_step_ns"],
+  ["TIER1_NS", "tier1_ns"],
+  ["TIER2_NS", "tier2_ns"],
+];
+
+/** Demo defaults, with optional timer overrides from the environment. */
+export function demoParamsFromEnv() {
+  const params = { ...DEMO_PARAMS };
+  const applied = [];
+  for (const [name, key] of TIMER_ENV) {
+    const raw = optional(name, "").trim();
+    if (!raw) continue;
+    if (!/^[1-9]\d*$/.test(raw)) {
+      throw new Error(`${name} must be a positive integer`);
+    }
+    params[key] = raw;
+    applied.push(`${name}=${raw}`);
+  }
+  if (BigInt(params.max_life_max_ns) < BigInt(params.max_life_min_ns)) {
+    throw new Error("MAX_LIFE_MAX_NS is below MAX_LIFE_MIN_NS");
+  }
+  return { params, applied };
+}
+
 export const DEMO_PARAMS = {
   fee_bps: 100,
   inherit_bps: 50,

@@ -1,4 +1,4 @@
-const RESERVED = new Set([
+export const RESERVED_TICKERS = [
   "USDC",
   "USDT",
   "USDE",
@@ -13,7 +13,9 @@ const RESERVED = new Set([
   "WBTC",
   "SOL",
   "AURORA",
-]);
+] as const;
+
+const RESERVED = new Set<string>(RESERVED_TICKERS);
 
 export function symbolProblem(raw: string): string | null {
   const symbol = raw.trim().toUpperCase();
