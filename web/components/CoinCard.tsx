@@ -1,4 +1,4 @@
-import { Pet } from "@/components/Pet";
+import { CoinArt } from "@/components/CoinArt";
 import { TimeRing } from "@/components/TimeRing";
 import { formatAgo, formatDuration, formatUsdc, marketCapRaw, moodLabel, petMood, shortAccount } from "@/lib/format";
 import type { CoinView, TradeView } from "@/lib/types";
@@ -22,7 +22,7 @@ export function CoinCard({
   return (
     <Link href={`/coin/${coin.coin_id}`} className={`card coin-card${dead ? " is-dead" : ""}`}>
       <div className="coin-top">
-        <Pet mood={mood} size="sm" />
+        <CoinArt imageUri={coin.image_uri} mood={mood} size="sm" alt={coin.name} />
         <div className="coin-name">
           <div className="symbol">{coin.symbol}</div>
           <h3>{coin.name}</h3>

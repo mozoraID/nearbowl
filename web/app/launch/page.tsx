@@ -11,7 +11,7 @@ export default function LaunchPage() {
     <div className="page page-pad">
       <header className="section-head">
         <h1>Launch a coin</h1>
-        <p>Name the pet, pick a ticker, and seed the bowl with USDC. You can preview the card while you type.</p>
+        <p>Name the pet, pick a ticker, and seed the bowl with USDC. Add a picture if you want. The card updates as you go.</p>
       </header>
       <LaunchForm />
     </div>

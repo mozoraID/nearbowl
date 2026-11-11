@@ -24,8 +24,8 @@ function Hero() {
           <h1>A pet that lives on USDC.</h1>
           <p className="lede">Feed it by buying. If the timer hits zero, holders split whatever USDC is left in the bowl.</p>
           <div className="hero-actions">
-            <Link className="solid" href="/demo">
-              Try the demo
+            <Link className="solid" href="/start">
+              Get started
             </Link>
             <Link className="ghost on-dark" href="/launch">
               Launch a coin

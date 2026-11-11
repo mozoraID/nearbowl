@@ -16,10 +16,13 @@ function IconHome() {
   );
 }
 
-function IconDemo() {
+function IconStart() {
   return (
     <svg className="tab-icon" viewBox="0 0 24 24" aria-hidden="true">
-      <path d="M8 5v14l11-7z" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinejoin="round" />
+      <path d="M8 6h11M8 12h11M8 18h11" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
+      <circle cx="4.5" cy="6" r="1.2" fill="currentColor" />
+      <circle cx="4.5" cy="12" r="1.2" fill="currentColor" />
+      <circle cx="4.5" cy="18" r="1.2" fill="currentColor" />
     </svg>
   );
 }
@@ -36,7 +39,7 @@ function Frame({ children }: { children: React.ReactNode }) {
   const path = usePathname();
   const explore = path === "/" || path.startsWith("/coin");
   const launch = path.startsWith("/launch");
-  const demo = path.startsWith("/demo");
+  const start = path.startsWith("/start");
   return (
     <div className="app">
       <a className="skip" href="#main">
@@ -56,8 +59,8 @@ function Frame({ children }: { children: React.ReactNode }) {
               <Link href="/" aria-current={explore ? "page" : undefined}>
                 Explore
               </Link>
-              <Link href="/demo" aria-current={demo ? "page" : undefined}>
-                Demo
+              <Link href="/start" aria-current={start ? "page" : undefined}>
+                Get started
               </Link>
               <Link href="/launch" aria-current={launch ? "page" : undefined}>
                 Launch
@@ -72,7 +75,7 @@ function Frame({ children }: { children: React.ReactNode }) {
               <strong>{isTestnet ? "Testnet only." : "Mainnet."}</strong>{" "}
               {isTestnet
                 ? "These coins are play money. tUSDC is not a real dollar, and a dead coin pays a share of what is left, not a refund."
-                : "This factory settles the configured USDC. Demo controls must be off."}
+                : "This factory settles the configured USDC."}
             </p>
           </div>
         </div>
@@ -114,9 +117,9 @@ function Frame({ children }: { children: React.ReactNode }) {
           <IconHome />
           Explore
         </Link>
-        <Link href="/demo" className="tab" aria-current={demo ? "page" : undefined}>
-          <IconDemo />
-          Demo
+        <Link href="/start" className="tab" aria-current={start ? "page" : undefined}>
+          <IconStart />
+          Get started
         </Link>
         <Link href="/launch" className="tab" aria-current={launch ? "page" : undefined}>
           <IconLaunch />

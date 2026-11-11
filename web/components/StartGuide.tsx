@@ -10,7 +10,7 @@ import type { CoinView } from "@/lib/types";
 import Link from "next/link";
 import { useEffect, useState } from "react";
 
-export function DemoGuide() {
+export function StartGuide() {
   const { accountId, ready, connect } = useWallet();
   const { balance, registered } = useUsdcAccount();
   const [alive, setAlive] = useState<CoinView[] | null>(null);
@@ -48,11 +48,11 @@ export function DemoGuide() {
   }, []);
 
   return (
-    <div className="demo">
+    <div className="start-guide">
       <header className="section-head">
         <p className="eyebrow on-light">Three steps</p>
-        <h1>Try the demo</h1>
-        <p>Connect a testnet wallet, take free tUSDC, then launch a coin or feed one that is still alive. Nothing here is a real dollar.</p>
+        <h1>Get started</h1>
+        <p>Connect a testnet wallet, take free tUSDC, then launch a coin or feed one that is still alive. tUSDC is play money.</p>
       </header>
       <ol className="stepper">
         <li className={accountId ? "is-done" : step === 1 ? "is-current" : ""} aria-current={step === 1 ? "step" : undefined}>
