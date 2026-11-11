@@ -1,0 +1,4 @@
+# Host-function path for near-sdk >= 5.27, and strip debug symbols.
+# Applied only to wasm builds, so unit tests still use the mock runtime.
+[target.wasm32-unknown-unknown]
+rustflags = ["-C", "link-arg=-s", "--cfg", "near"]
