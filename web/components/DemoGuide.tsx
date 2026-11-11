@@ -4,7 +4,7 @@ import { FaucetButton, useUsdcAccount } from "@/components/FaucetButton";
 import { Pet } from "@/components/Pet";
 import { useWallet } from "@/components/Wallet";
 import { isTestnet } from "@/lib/config";
-import { listCoins } from "@/lib/factory";
+import { getConfig, listCoins } from "@/lib/factory";
 import { formatDuration, formatUsdc, shortAccount } from "@/lib/format";
 import type { CoinView } from "@/lib/types";
 import Link from "next/link";
@@ -14,6 +14,7 @@ export function DemoGuide() {
   const { accountId, ready, connect } = useWallet();
   const { balance, registered } = useUsdcAccount();
   const [alive, setAlive] = useState<CoinView[] | null>(null);
+  const [initialLife, setInitialLife] = useState<string | null>(null);
   let hasBalance = false;
   try {
     hasBalance = balance !== null && BigInt(balance) > 0n;
@@ -35,6 +36,11 @@ export function DemoGuide() {
     };
     load();
     const timer = window.setInterval(load, 8000);
+    getConfig()
+      .then((row) => {
+        if (!stop) setInitialLife(row.params.initial_life_ns);
+      })
+      .catch(() => undefined);
     return () => {
       stop = true;
       window.clearInterval(timer);
@@ -96,7 +102,11 @@ export function DemoGuide() {
             ) : alive.length === 0 ? (
               <div className="inline-note">
                 <Pet mood="hungry" size="sm" />
-                <p>Nothing is alive right now. Demo timers are short on testnet, so coins reach the graveyard quickly. Launch the first one, then buy at least 1 tUSDC to feed it.</p>
+                <p>
+                  {initialLife
+                    ? `Nothing is alive right now. Each coin on this factory starts with ${formatDuration(BigInt(initialLife))} of life, so they reach the graveyard quickly. Launch the first one, then buy at least 1 tUSDC to feed it.`
+                    : "Nothing is alive right now. Launch the first one, then buy at least 1 tUSDC to feed it."}
+                </p>
               </div>
             ) : (
               <ul className="feed-list">

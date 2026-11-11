@@ -65,9 +65,9 @@ function ns(value: string): string {
 }
 
 export function Guide({ params }: { params: ParamsView | null }) {
-  const life = params ? ns(params.initial_life_ns) : "45s";
-  const capMin = params ? ns(params.max_life_min_ns) : "180s";
-  const capMax = params ? ns(params.max_life_max_ns) : "540s";
+  const life = params ? ns(params.initial_life_ns) : null;
+  const capMin = params ? ns(params.max_life_min_ns) : null;
+  const capMax = params ? ns(params.max_life_max_ns) : null;
   return (
     <>
       <section id="how" className="section">
@@ -85,7 +85,10 @@ export function Guide({ params }: { params: ParamsView | null }) {
           ))}
         </ol>
         <p className="hint section-note">
-          This factory starts each coin with {life} of life, capped between {capMin} and {capMax}. The README demo timer is 45 seconds, with a 180–540 second cap. Production timing is 24 hours of initial life and a 24–72 hour cap.
+          {life && capMin && capMax
+            ? `This factory starts each coin with ${life} of life, capped between ${capMin} and ${capMax}. `
+            : null}
+          The README demo timer is 45 seconds, with a 180–540 second cap. Production timing is 24 hours of initial life and a 24–72 hour cap.
         </p>
       </section>
 

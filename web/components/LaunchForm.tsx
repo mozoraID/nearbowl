@@ -206,7 +206,7 @@ export function LaunchForm() {
             </div>
             <div>
               <dt>Timer</dt>
-              <dd>{initialLife !== null ? formatDuration(initialLife) : "45s"}</dd>
+              <dd>{initialLife !== null ? formatDuration(initialLife) : "—"}</dd>
             </div>
           </dl>
         </div>
@@ -215,7 +215,7 @@ export function LaunchForm() {
           <ul>
             <li>The full seed becomes the pool. There is no launch fee.</li>
             <li>Market cap starts at twice the seed, because price times supply is 2 × reserve.</li>
-            <li>The timer starts at {initialLife !== null ? formatDuration(initialLife) : "45 seconds on the demo config"}.</li>
+            <li>The timer starts at {initialLife !== null ? formatDuration(initialLife) : "this factory's initial life"}.</li>
             <li>Seed tokens are claim-only. If the coin dies, the creator keeps half of the seed share and the protocol keeps the other half. A share of what is left, not a refund.</li>
           </ul>
           {typeof storage === "string" && BigInt(storage) >= BigInt(LAUNCH_STORAGE_YOCTO) ? <p className="hint ok">Factory storage deposit is in place.</p> : null}

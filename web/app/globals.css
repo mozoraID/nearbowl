@@ -75,9 +75,20 @@ button { cursor: pointer; }
 .wallet-short { display: none; }
 .wallet-id { display: block; max-width: 108px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
-.banner { background: var(--ink); color: #d5dee6; padding: 2px 0 14px; }
-.banner p { margin: 0; font-size: 0.9rem; line-height: 1.45; }
-.banner strong { color: var(--mint); }
+.banner { background: var(--ink); padding: 0 0 16px; }
+.banner-note {
+  margin: 0;
+  width: fit-content;
+  max-width: 100%;
+  padding: 8px 14px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.07);
+  border: 1px solid rgba(0, 236, 151, 0.35);
+  color: #d5dee6;
+  font-size: 0.9rem;
+  line-height: 1.45;
+}
+.banner-note strong { color: var(--mint); }
 
 .tabbar {
   display: grid;

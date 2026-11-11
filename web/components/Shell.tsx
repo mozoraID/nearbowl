@@ -67,12 +67,14 @@ function Frame({ children }: { children: React.ReactNode }) {
           </div>
         </div>
         <div className="banner">
-          <p className="page" role="note">
-            <strong>{isTestnet ? "Testnet only." : "Mainnet."}</strong>{" "}
-            {isTestnet
-              ? "These coins are play money. tUSDC is not a real dollar, and a dead coin pays a share of what is left, not a refund."
-              : "This factory settles the configured USDC. Demo controls must be off."}
-          </p>
+          <div className="page">
+            <p className="banner-note" role="note">
+              <strong>{isTestnet ? "Testnet only." : "Mainnet."}</strong>{" "}
+              {isTestnet
+                ? "These coins are play money. tUSDC is not a real dollar, and a dead coin pays a share of what is left, not a refund."
+                : "This factory settles the configured USDC. Demo controls must be off."}
+            </p>
+          </div>
         </div>
       </header>
       <main id="main">{children}</main>

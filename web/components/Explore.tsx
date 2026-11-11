@@ -279,7 +279,9 @@ export function Explore() {
               <div>
                 <h3>Nothing is alive right now.</h3>
                 <p>
-                  Demo timers on this testnet factory are short{lifeLabel ? ` (each coin starts with ${lifeLabel})` : ""}, so pets reach the graveyard quickly. Launch one and feed it before the timer runs out.
+                  {lifeLabel
+                    ? `Each coin on this factory starts with ${lifeLabel} of life, so pets reach the graveyard quickly. Launch one and feed it before the timer runs out.`
+                    : "Launch one and feed it before the timer runs out."}
                 </p>
                 <Link className="solid" href="/launch">
                   Launch the first one
