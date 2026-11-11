@@ -8,8 +8,11 @@
  *   DEPLOYER_PRIVATE_KEY=ed25519:...
  *   # or NEAR_CREDENTIALS_FILE=./credentials.json
  *
- * Intended accounts: factory.nearbowl.testnet and tusdc.nearbowl.testnet
+ * Default sub-account names: factory.<deployer> and tusdc.<deployer>
  * (override with FACTORY_ACCOUNT_ID and TUSDC_ACCOUNT_ID).
+ * The public factory is bowl.nearbowl.testnet. factory.nearbowl.testnet is the
+ * earlier short-timer demo factory. Timer env vars apply only when the
+ * factory account is created.
  */
 import { readFileSync } from "node:fs";
 import { actions } from "near-api-js";

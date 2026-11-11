@@ -32,7 +32,7 @@ const FAQ = [
   },
   {
     q: "Why is the alive list empty?",
-    a: "The public testnet factory uses the short demo timer, so coins reach the graveyard quickly. Launch one and feed it, or open a ghost and read how it ended.",
+    a: "A coin leaves the alive list when its timer hits zero. The starting life is read from this factory and shown on the empty state. Launch one, or open a ghost and read how it ended.",
   },
   {
     q: "How do I try this?",
@@ -86,9 +86,8 @@ export function Guide({ params }: { params: ParamsView | null }) {
         </ol>
         <p className="hint section-note">
           {life && capMin && capMax
-            ? `This factory starts each coin with ${life} of life, capped between ${capMin} and ${capMax}. `
-            : null}
-          The README demo timer is 45 seconds, with a 180–540 second cap. Production timing is 24 hours of initial life and a 24–72 hour cap.
+            ? `This factory starts each coin with ${life} of life, capped between ${capMin} and ${capMax}.`
+            : "Starting life and the life cap are read from this factory."}
         </p>
       </section>
 
@@ -105,7 +104,10 @@ export function Guide({ params }: { params: ParamsView | null }) {
           <article className="card rule">
             <h3>One wallet cannot babysit</h3>
             <p>
-              Each account has a leaky bucket. Recent raw seconds leak at 0.25 per second. The next seconds count at 100% for the first tier, 50% for the second, and 0% after that. On the demo timer each tier is 60 seconds. On the production timer each tier is 6 hours.
+              Each account has a leaky bucket. Recent raw seconds leak at 0.25 per second. The next seconds count at 100% for the first tier, 50% for the second, and 0% after that.
+              {params ? ` On this factory the tiers are ${ns(params.tier1_ns)}, then ${ns(params.tier2_ns)}.` : ""}
+              {" "}
+              One account cannot keep a coin alive by itself.
             </p>
           </article>
           <article className="card rule">
@@ -177,7 +179,7 @@ export function Guide({ params }: { params: ParamsView | null }) {
               </div>
             </dl>
           ) : (
-            <p className="hint">Factory parameters are not available yet. The cards above use the documented demo configuration: 45 second initial life, 180–540 second cap, 2 seconds of life per USDC, 60 second feeding tiers, and a 1% fee split 50 / 30 / 20.</p>
+            <p className="hint">Factory parameters are not available yet. Timer lengths show up here once the factory view loads. The fee in the cards is the published 1% split, 0.50% / 0.30% / 0.20%.</p>
           )}
         </div>
       </section>
