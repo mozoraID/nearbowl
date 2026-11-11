@@ -1,7 +1,8 @@
 "use client";
 
+import { CoinArt } from "@/components/CoinArt";
 import { FaucetButton } from "@/components/FaucetButton";
-import { Pet } from "@/components/Pet";
+import { ImageUpload, type CoinImageField } from "@/components/ImageUpload";
 import { useToast } from "@/components/Toast";
 import { useWallet } from "@/components/Wallet";
 import { config, LAUNCH_STORAGE_YOCTO, USDC_STORAGE_YOCTO } from "@/lib/config";
@@ -9,6 +10,7 @@ import { humanError } from "@/lib/errors";
 import { txUrl } from "@/lib/explorer";
 import { getConfig } from "@/lib/factory";
 import { formatDuration, formatTokens, formatUsdc, parseUsdc, seedPreview } from "@/lib/format";
+import { safeCoinImage } from "@/lib/image";
 import { view } from "@/lib/near";
 import { symbolProblem } from "@/lib/reserved";
 import type { StorageView } from "@/lib/types";
@@ -22,13 +24,7 @@ function nameProblem(name: string): string | null {
   return null;
 }
 
-function imageProblem(image: string): string | null {
-  const trimmed = image.trim();
-  if (!trimmed) return null;
-  if ([...trimmed].length > 200) return "Keep the image link to 200 characters.";
-  if (!/^https?:\/\/\S+$/.test(trimmed)) return "Use an http or https link, or leave this blank.";
-  return null;
-}
+const EMPTY_PICTURE: CoinImageField = { url: "", previewUrl: null, error: null, busy: false };
 
 export function LaunchForm() {
   const { accountId, call, connect } = useWallet();
@@ -36,7 +32,7 @@ export function LaunchForm() {
   const router = useRouter();
   const [name, setName] = useState("");
   const [symbol, setSymbol] = useState("");
-  const [image, setImage] = useState("");
+  const [picture, setPicture] = useState<CoinImageField>(EMPTY_PICTURE);
   const [seed, setSeed] = useState("100");
   const [symbolNote, setSymbolNote] = useState("3–10 letters or numbers.");
   const [symbolOk, setSymbolOk] = useState(false);
@@ -48,7 +44,7 @@ export function LaunchForm() {
 
   const localSymbol = symbol.trim() ? symbolProblem(symbol) : null;
   const nameError = nameProblem(name);
-  const imageError = imageProblem(image);
+  const imageError = picture.error;
   const parsedSeed = parseUsdc(seed);
   const seedError = parsedSeed === null ? "Use a number with up to 6 decimals." : BigInt(parsedSeed) < minSeed ? `Seed at least ${formatUsdc(minSeed.toString())} USDC.` : null;
   const preview = parsedSeed && !seedError ? seedPreview(parsedSeed) : null;
@@ -133,7 +129,20 @@ export function LaunchForm() {
       connect();
       return;
     }
-    if (nameError || imageError || seedError || !symbolOk || !parsedSeed) return;
+    if (nameError || imageError || picture.busy || seedError || !symbolOk || !parsedSeed) return;
+    let image = "";
+    if (picture.url) {
+      const safe = safeCoinImage(picture.url);
+      if (!safe) {
+        push({
+          tone: "err",
+          title: "Picture link is too long",
+          detail: "The factory stores at most 200 characters. Remove the picture and choose another.",
+        });
+        return;
+      }
+      image = safe;
+    }
     setPending(true);
     try {
       const usdcStorage = await view<StorageView | null>(config.usdcAccountId, "storage_balance_of", { account_id: accountId });
@@ -158,7 +167,7 @@ export function LaunchForm() {
           receiver_id: config.factoryAccountId,
           amount: parsedSeed,
           memo: null,
-          msg: JSON.stringify({ action: "launch", name: name.trim(), symbol: symbol.trim(), image_uri: image.trim() }),
+          msg: JSON.stringify({ action: "launch", name: name.trim(), symbol: symbol.trim(), image_uri: image }),
         },
         "1",
         "200000000000000",
@@ -184,7 +193,7 @@ export function LaunchForm() {
       <aside className="launch-preview">
         <div className="card coin-card">
           <div className="coin-top">
-            <Pet mood="happy" size="sm" />
+            <CoinArt previewSrc={picture.previewUrl} imageUri={picture.url} mood="happy" size="sm" alt={name.trim() || "Your coin"} />
             <div className="coin-name">
               <div className="symbol">{symbol.trim() || "PET"}</div>
               <p className="preview-title">{name.trim() || "Your coin"}</p>
@@ -238,11 +247,7 @@ export function LaunchForm() {
           <input value={symbol} maxLength={10} onChange={(event) => setSymbol(event.target.value.toUpperCase())} placeholder="BOWL" required autoCapitalize="characters" />
           <span className={symbolOk ? "hint ok" : symbol.trim() ? "hint warn" : "hint"}>{symbolNote}</span>
         </label>
-        <label>
-          Image URL <span className="hint">optional</span>
-          <input value={image} maxLength={200} onChange={(event) => setImage(event.target.value)} placeholder="https://" />
-          {imageError ? <span className="hint warn">{imageError}</span> : <span className="hint">Shown by indexers later. The pet on this page stays the bowl character.</span>}
-        </label>
+        <ImageUpload onChange={setPicture} />
         <label>
           Seed (USDC)
           <input inputMode="decimal" value={seed} onChange={(event) => setSeed(event.target.value)} required />
@@ -254,7 +259,7 @@ export function LaunchForm() {
             Deposit 0.06 NEAR for storage
           </button>
         ) : null}
-        <button className="solid" type="submit" disabled={pending || (symbol.trim().length > 0 && !symbolOk)}>
+        <button className="solid" type="submit" disabled={pending || picture.busy || Boolean(imageError) || (symbol.trim().length > 0 && !symbolOk)}>
           {pending ? "Sending…" : accountId ? "Launch" : "Connect to launch"}
         </button>
         {submitted && (nameError || imageError || seedError || !symbolOk) ? (

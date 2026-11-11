@@ -1,7 +1,7 @@
 "use client";
 
 import { FaucetButton } from "@/components/FaucetButton";
-import { Pet } from "@/components/Pet";
+import { CoinArt } from "@/components/CoinArt";
 import { TimeRing } from "@/components/TimeRing";
 import { useToast } from "@/components/Toast";
 import { useWallet } from "@/components/Wallet";
@@ -405,7 +405,7 @@ export function CoinScreen({ id }: { id: string }) {
       </p>
       <div className="coin-layout">
         <section className="card coin-stage">
-          <Pet mood={mood} size="lg" pulse={pulse} />
+          <CoinArt imageUri={coin.image_uri} mood={mood} size="lg" pulse={pulse} alt={coin.name} />
           <div>
             <div className="symbol">{coin.symbol}</div>
             <h1>{coin.name}</h1>

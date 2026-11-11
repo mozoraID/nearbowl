@@ -35,8 +35,8 @@ const FAQ = [
     a: "A coin leaves the alive list when its timer hits zero. The starting life is read from this factory and shown on the empty state. Launch one, or open a ghost and read how it ended.",
   },
   {
-    q: "How do I try this?",
-    a: "Connect a testnet wallet, take 100 tUSDC from the faucet (once a minute), then launch a coin or buy at least 1 tUSDC of one that is still alive.",
+    q: "How do I get started?",
+    a: "Open Get started, connect a testnet wallet, take 100 tUSDC from the faucet (once a minute), then launch a coin or buy at least 1 tUSDC of one that is still alive.",
   },
   {
     q: "Can the creator sell the seed?",
@@ -116,7 +116,7 @@ export function Guide({ params }: { params: ParamsView | null }) {
           </article>
           <article className="card rule">
             <h3>Reserved tickers</h3>
-            <p>3–10 letters or numbers. Anything starting with USD is rejected, plus {RESERVED_TICKERS.join(", ")}. Taken symbols stay taken after death. The demo minimum seed is 1 USDC. Launch storage is 0.06 NEAR.</p>
+            <p>3–10 letters or numbers. Anything starting with USD is rejected, plus {RESERVED_TICKERS.join(", ")}. Taken symbols stay taken after death. The minimum seed on the public testnet factory is 1 USDC. Launch storage is 0.06 NEAR.</p>
           </article>
         </div>
         <div className="card factory-facts">

@@ -85,7 +85,7 @@ cargo test -p nearbowl-sandbox -- --test-threads=1
 
 Sandbox tests need OpenSSL headers (`libssl-dev`, `pkg-config`) and a built wasm. They cover launch → buy → feed → sell → death → claim, a wrong token, a malformed message, a launch without storage, a buy on a dead coin, a payout to an account that is not registered on USDC, and `demo_set_remaining` with demo controls off.
 
-Rust unit tests reproduce the reference numbers (the 50/500/1000 curve, the demo walkthrough, the 9 hour bucket, hunger 22/64 at 30s of 45s). Property tests check solvency after every operation and that an attacker who only trades against passive holders does not end with more USDC than they put in.
+Rust unit tests reproduce the reference numbers (the 50/500/1000 curve, the demo script walkthrough, the 9 hour bucket, hunger 22/64 at 30s of 45s). Property tests check solvency after every operation and that an attacker who only trades against passive holders does not end with more USDC than they put in.
 
 ## Deploy to testnet
 
@@ -104,11 +104,11 @@ With `DEPLOYER_ACCOUNT_ID=nearbowl.testnet` the script creates and deploys:
 
 - `tusdc.nearbowl.testnet` — mock USDC, owner is the deployer
 - `factory.<deployer>` unless `FACTORY_ACCOUNT_ID` is set — factory, short demo timers unless the timer env vars below are set, `allow_demo_controls = true`
-- `alice.nearbowl.testnet`, `bob.nearbowl.testnet`, `carol.nearbowl.testnet` — demo wallets, same full-access key as the deployer
+- `alice.nearbowl.testnet`, `bob.nearbowl.testnet`, `carol.nearbowl.testnet` — wallets for the demo script, same full-access key as the deployer
 
-The public factory is `bowl.nearbowl.testnet`, with the same tUSDC account `tusdc.nearbowl.testnet`. `factory.nearbowl.testnet` is the earlier short-timer demo factory (45 second initial life, 180–540 second cap).
+The public factory is `bowl.nearbowl.testnet`, with the same tUSDC account `tusdc.nearbowl.testnet`. `factory.nearbowl.testnet` is the earlier short-timer factory the demo script uses (45 second initial life, 180–540 second cap).
 
-`bowl.nearbowl.testnet` was created with these timer overrides. Other init params are the short-demo defaults (1% fee split 50 / 30 / 20, 3 second scar step, 1 USDC minimum seed, `allow_demo_controls` true).
+`bowl.nearbowl.testnet` was created with these timer overrides. Other init params are the demo script defaults (1% fee split 50 / 30 / 20, 3 second scar step, 1 USDC minimum seed, `allow_demo_controls` true).
 
 | Env var | Value | Meaning |
 | --- | --- | --- |
@@ -137,7 +137,7 @@ node scripts/deploy-testnet.mjs
 
 Running the script again updates the wasm and leaves state in place. Timer env vars apply only when the factory account is created. It refuses to run when `NEAR_NETWORK_ID=mainnet`.
 
-## Demo
+## Demo script
 
 ```bash
 set -a && source .env && set +a
@@ -167,7 +167,9 @@ Vercel needs these public variables:
 | `NEXT_PUBLIC_FACTORY_ACCOUNT_ID` | `bowl.nearbowl.testnet` |
 | `NEXT_PUBLIC_USDC_ACCOUNT_ID` | `tusdc.nearbowl.testnet` |
 
-The UI has a testnet banner, a tUSDC faucet, Explore (alive coins and a Graveyard), Launch, and a coin page with the timer, hunger meter, quote, buy, sell, claim, and the on-contract trade list.
+The UI has a testnet banner, a tUSDC faucet, Explore (alive coins and a Graveyard), Get started (`/start`, with `/demo` redirecting there), Launch, and a coin page with the timer, hunger meter, quote, buy, sell, claim, and the on-contract trade list.
+
+Coin pictures are optional. Launch uploads them from the browser with `@vercel/blob/client` through `/api/upload`. The route allows PNG, JPEG, WebP, and GIF, caps the file at 2 MB, and stores it under `coins/` with a random suffix. `BLOB_READ_WRITE_TOKEN` stays on the server. Without that token the form says so, and the pet art is used. The factory keeps `image_uri` to 200 characters.
 
 ## Mainnet
 
@@ -186,13 +188,13 @@ The wasm is the same. Only init config changes. The Testnet column is the script
 | `allow_demo_controls` | `true` | **`false`** |
 | Accounts | `*.testnet` | `*.near` |
 
-`ext_ns_per_raw_usdc` is nanoseconds per raw USDC unit: `360_000` in production (360 seconds per whole USDC) and `2_000` in the demo. Fee shares stay 50 / 30 / 20 bps inside the 100 bps fee. `creator_haircut_bps` stays 5000.
+`ext_ns_per_raw_usdc` is nanoseconds per raw USDC unit: `360_000` in production (360 seconds per whole USDC) and `2_000` in the demo script. Fee shares stay 50 / 30 / 20 bps inside the 100 bps fee. `creator_haircut_bps` stays 5000.
 
 There is no mainnet deployment in this repository. A mainnet factory must be initialized with `allow_demo_controls: false`. The deploy script exits if the network is mainnet so the demo flag cannot be turned on by accident.
 
 ## Known limitations
 
-- **Death is not a refund.** Late buyers get a share of what is left. In the demo, Alice gets about 12.57 USDC back on 20 USDC.
+- **Death is not a refund.** Late buyers get a share of what is left. In the demo script, Alice gets about 12.57 USDC back on 20 USDC.
 - **Quiet coins have a wide sell spread.** At 12 hours left, a small holder gets about 75% of the curve value. That is the cost of closing the bank run.
 - **Feed-then-dump is slowed, not removed.** A large holder can still gain by paying to keep a coin fed for a long time and then selling closer to the curve. It is public and slow.
 - **Sybil volume is cheap.** One wallet cannot keep a coin alive. Four wallets can, for about 2.40–4.80 USDC of fees per day, plus a small storage deposit per account.
