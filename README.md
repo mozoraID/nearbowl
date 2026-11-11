@@ -133,7 +133,7 @@ Vercel needs these public variables:
 | Name | Example |
 | --- | --- |
 | `NEXT_PUBLIC_NEAR_NETWORK` | `testnet` |
-| `NEXT_PUBLIC_RPC_URL` | `https://rpc.testnet.near.org` |
+| `NEXT_PUBLIC_RPC_URL` | `https://test.rpc.fastnear.com` |
 | `NEXT_PUBLIC_FACTORY_ACCOUNT_ID` | `factory.nearbowl.testnet` |
 | `NEXT_PUBLIC_USDC_ACCOUNT_ID` | `tusdc.nearbowl.testnet` |
 

@@ -1,6 +1,6 @@
 export const config = {
   network: process.env.NEXT_PUBLIC_NEAR_NETWORK ?? "testnet",
-  rpcUrl: process.env.NEXT_PUBLIC_RPC_URL ?? "https://rpc.testnet.near.org",
+  rpcUrl: process.env.NEXT_PUBLIC_RPC_URL ?? "https://test.rpc.fastnear.com",
   factoryAccountId: process.env.NEXT_PUBLIC_FACTORY_ACCOUNT_ID ?? "factory.nearbowl.testnet",
   usdcAccountId: process.env.NEXT_PUBLIC_USDC_ACCOUNT_ID ?? "tusdc.nearbowl.testnet",
 };

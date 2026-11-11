@@ -21,7 +21,7 @@ export function loadSigner() {
     console.error("Refusing to run: this script targets testnet. allow_demo_controls must be false on mainnet, and this script always turns it on.");
     process.exit(1);
   }
-  const rpc = optional("NEAR_RPC_URL", "https://rpc.testnet.near.org");
+  const rpc = optional("NEAR_RPC_URL", "https://test.rpc.fastnear.com");
   const accountId = env("DEPLOYER_ACCOUNT_ID");
   let secret = optional("DEPLOYER_PRIVATE_KEY");
   if (!secret && process.env.NEAR_CREDENTIALS_FILE) {
