@@ -10,6 +10,12 @@ Each coin is a pet that has to be fed.
 
 This repository is a testnet prototype.
 
+## Hackathon submission
+
+- **Live prototype:** https://nearbowl.vercel.app/
+- **Demo post on X:** https://x.com/ijustabi/status/2120652614207725595
+- **Separate project by the same builder:** [NearPocket](https://github.com/mozoraID/nearpocket) — a NEAR testnet wallet prototype for QR-based payments and approval-gated shopping. It is an independent hackathon submission, with its own repository and smart contract, not a NearBowl feature or dependency.
+
 ## The mechanic
 
 Price grows with the square root of the pool. With reserve `R` and supply `s`:
