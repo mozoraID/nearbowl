@@ -1,7 +1,7 @@
 const factoryFromEnv =
   process.env.NEXT_PUBLIC_FACTORY_ID?.trim() ||
   process.env.NEXT_PUBLIC_FACTORY_ACCOUNT_ID?.trim() ||
-  "pump.nearbowl.testnet";
+  "pet.nearbowl.testnet";
 
 export const config = {
   network: process.env.NEXT_PUBLIC_NEAR_NETWORK ?? "testnet",

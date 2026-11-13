@@ -46,7 +46,7 @@ w_time = ceil(64 · clamp(1 − T_rem / T_ref, 0, 1)) / 64
 w = max(w_time, scar)
 ```
 
-`T_ref` is the initial life (24 hours in production, 30 minutes on the public testnet factory, 45 seconds on the legacy short timer). The scar jumps up to `w_time` immediately and falls by at most 1/64 per recovery step (90 minutes in production, 3 seconds when the scar step is left on the script default). Feeding a coin back to full does not instantly restore curve exits. The public factory is `pump.nearbowl.testnet`. Its timers are in [Deploy to testnet](#deploy-to-testnet), and timer controls are off. `factory.nearbowl.testnet` is a legacy short-timer factory (45 second initial life, 180–540 second cap, timer controls on). The app does not use it. `scripts/demo.mjs` is the only thing that still talks to that legacy factory.
+`T_ref` is the initial life (24 hours in production and on the public testnet factory, 45 seconds on the legacy short timer). The scar jumps up to `w_time` immediately and falls by at most 1/64 per recovery step (90 minutes in production and on the public testnet factory, 3 seconds on the legacy short timer). Feeding a coin back to full does not instantly restore curve exits. The public factory is `pet.nearbowl.testnet`. Its timers are in [Deploy to testnet](#deploy-to-testnet), and timer controls are off. `factory.nearbowl.testnet` is a legacy short-timer factory (45 second initial life, 180–540 second cap, timer controls on). The app does not use it. `scripts/demo.mjs` is the only thing that still talks to that legacy factory.
 
 **Timer.** Only buys extend it. A buy of `G` USDC (at least 1) adds
 
@@ -103,36 +103,38 @@ node scripts/deploy-testnet.mjs
 With `DEPLOYER_ACCOUNT_ID=nearbowl.testnet` and the env file filled in, the script creates or updates:
 
 - `tusdc.nearbowl.testnet` — mock USDC, owner is the deployer. Already deployed; a second run only updates the wasm.
-- `pump.nearbowl.testnet` unless `FACTORY_ACCOUNT_ID` is set — the public factory, created from `nearbowl.testnet`. Timer controls are off unless `ALLOW_DEMO_CONTROLS=true`, which the script refuses for this account.
+- `pet.nearbowl.testnet` unless `FACTORY_ACCOUNT_ID` is set — the public factory, created from `nearbowl.testnet`. Timer controls are off unless `ALLOW_DEMO_CONTROLS=true`, which the script refuses for this account.
 - `alice.nearbowl.testnet`, `bob.nearbowl.testnet`, `carol.nearbowl.testnet` — wallets for the legacy walkthrough, same full-access key as the deployer
 
 `factory.nearbowl.testnet` is the legacy short-timer factory (45 second initial life, 180–540 second cap, timer controls on). It is not the factory the app reads. Do not point `NEXT_PUBLIC_FACTORY_ID` at it.
 
-The public factory uses these timer values. Other init params stay on the script defaults (1% fee split 50 / 30 / 20, 3 second scar step, 1 USDC minimum seed) except `allow_demo_controls`, which is `false`. `new` is called with 0.005 NEAR attached. The contract forwards 0.00125 NEAR to tUSDC `storage_deposit` for the factory account, so a separate registration call is not required when that deposit is present.
+The public factory uses these timer values. Other init params stay on the script defaults (1% fee split 50 / 30 / 20, 1 USDC minimum seed) except `allow_demo_controls`, which is `false`. `new` is called with 0.005 NEAR attached. The contract forwards 0.00125 NEAR to tUSDC `storage_deposit` for the factory account, so a separate registration call is not required when that deposit is present.
 
 | Env var | Value | Meaning |
 | --- | --- | --- |
-| `INITIAL_LIFE_NS` | `1800000000000` | 30 minutes |
-| `T_REF_NS` | `1800000000000` | 30 minutes, hunger reference |
-| `MAX_LIFE_MIN_NS` | `3600000000000` | 1 hour cap at or below 1,000 USDC |
-| `MAX_LIFE_MAX_NS` | `10800000000000` | 3 hour cap at or above 100,000 USDC |
-| `TWILIGHT_NS` | `300000000000` | 5 minutes |
-| `EXT_NS_PER_RAW_USDC` | `60000` | 60 seconds of life per USDC |
-| `TIER1_NS` | `600000000000` | 10 minutes |
-| `TIER2_NS` | `600000000000` | 10 minutes |
+| `INITIAL_LIFE_NS` | `86400000000000` | 24 hours |
+| `T_REF_NS` | `86400000000000` | 24 hours, hunger reference |
+| `MAX_LIFE_MIN_NS` | `172800000000000` | 48 hour cap at or below 1,000 USDC |
+| `MAX_LIFE_MAX_NS` | `259200000000000` | 72 hour cap at or above 100,000 USDC |
+| `TWILIGHT_NS` | `7200000000000` | 2 hours |
+| `EXT_NS_PER_RAW_USDC` | `360000` | 6 minutes of life per USDC |
+| `TIER1_NS` | `21600000000000` | 6 hours |
+| `TIER2_NS` | `21600000000000` | 6 hours |
+| `SCAR_STEP_NS` | `5400000000000` | 90 minutes per hunger recovery step |
 
 ```bash
-FACTORY_ACCOUNT_ID=pump.nearbowl.testnet \
+FACTORY_ACCOUNT_ID=pet.nearbowl.testnet \
 TUSDC_ACCOUNT_ID=tusdc.nearbowl.testnet \
 ALLOW_DEMO_CONTROLS=false \
-INITIAL_LIFE_NS=1800000000000 \
-T_REF_NS=1800000000000 \
-MAX_LIFE_MIN_NS=3600000000000 \
-MAX_LIFE_MAX_NS=10800000000000 \
-TWILIGHT_NS=300000000000 \
-EXT_NS_PER_RAW_USDC=60000 \
-TIER1_NS=600000000000 \
-TIER2_NS=600000000000 \
+INITIAL_LIFE_NS=86400000000000 \
+T_REF_NS=86400000000000 \
+MAX_LIFE_MIN_NS=172800000000000 \
+MAX_LIFE_MAX_NS=259200000000000 \
+TWILIGHT_NS=7200000000000 \
+EXT_NS_PER_RAW_USDC=360000 \
+TIER1_NS=21600000000000 \
+TIER2_NS=21600000000000 \
+SCAR_STEP_NS=5400000000000 \
 node scripts/deploy-testnet.mjs
 ```
 
@@ -150,20 +152,20 @@ node scripts/deploy-testnet.mjs
     "creator_haircut_bps": 5000,
     "min_trade_usdc": "1000000",
     "min_seed_usdc": "1000000",
-    "ext_ns_per_raw_usdc": "60000",
-    "initial_life_ns": "1800000000000",
-    "t_ref_ns": "1800000000000",
-    "twilight_ns": "300000000000",
+    "ext_ns_per_raw_usdc": "360000",
+    "initial_life_ns": "86400000000000",
+    "t_ref_ns": "86400000000000",
+    "twilight_ns": "7200000000000",
     "twilight_min_factor_bps": 2500,
-    "max_life_min_ns": "3600000000000",
-    "max_life_max_ns": "10800000000000",
+    "max_life_min_ns": "172800000000000",
+    "max_life_max_ns": "259200000000000",
     "r_small": "1000000000",
     "r_large": "100000000000",
-    "tier1_ns": "600000000000",
-    "tier2_ns": "600000000000",
+    "tier1_ns": "21600000000000",
+    "tier2_ns": "21600000000000",
     "leak_bps": 2500,
-    "scar_step_ns": "3000000000",
-    "launch_storage_min_yocto": "60000000000000000000000",
+    "scar_step_ns": "5400000000000",
+    "launch_storage_min_yocto": "2160000000000000000000000",
     "allow_demo_controls": false
   }
 }
@@ -172,7 +174,7 @@ node scripts/deploy-testnet.mjs
 If a factory was initialized without the 0.00125 NEAR tUSDC deposit, register it once:
 
 ```bash
-near call pump.nearbowl.testnet register_usdc '{}' \
+near call pet.nearbowl.testnet register_usdc '{}' \
   --accountId nearbowl.testnet --deposit 0.00125 --gas 30000000000000
 ```
 
@@ -206,7 +208,7 @@ Vercel needs these public variables. `NEXT_PUBLIC_FACTORY_ID` is the one the app
 | --- | --- |
 | `NEXT_PUBLIC_NEAR_NETWORK` | `testnet` |
 | `NEXT_PUBLIC_RPC_URL` | `https://test.rpc.fastnear.com` |
-| `NEXT_PUBLIC_FACTORY_ID` | `pump.nearbowl.testnet` |
+| `NEXT_PUBLIC_FACTORY_ID` | `pet.nearbowl.testnet` |
 | `NEXT_PUBLIC_USDC_ACCOUNT_ID` | `tusdc.nearbowl.testnet` |
 
 The footer reads the factory view and shows the account, initial life, life cap, seconds per USDC, and whether timer controls are off.
@@ -218,9 +220,9 @@ The UI has a testnet banner, a tUSDC faucet, Explore (alive coins and a Graveyar
 `/start` walks through one coin with the amounts up front:
 
 1. Faucet: 100 tUSDC, once a minute. The first tap registers the account for 0.00125 NEAR. The cycle itself spends 11 tUSDC.
-2. Launch: 10 tUSDC seed (minimum 1) and 0.06 NEAR of factory storage. No launch fee. The timer starts at the factory's initial life, 30 minutes on the public factory.
-3. Feed: buy at least 1 tUSDC. That adds about 60 seconds per USDC on the public factory, up to the 1–3 hour cap. Buys under 1 tUSDC mint tokens and do not add time.
-4. Sell while the coin is alive, or claim after it dies. A claim is not available during the 30 minutes (longer if someone keeps feeding). The creator's seed claim is cut in half. Bought tokens are not.
+2. Launch: 10 tUSDC seed (minimum 1) and 0.06 NEAR of factory storage. No launch fee. The timer starts at the factory's initial life, 24 hours on the public factory.
+3. Feed: buy at least 1 tUSDC. That adds about 6 minutes per USDC on the public factory, up to the 48–72 hour cap. Buys under 1 tUSDC mint tokens and do not add time.
+4. Sell while the coin is alive, or claim after it dies. A claim is not available during the first 24 hours (longer if someone keeps feeding). The creator's seed claim is cut in half. Bought tokens are not.
 
 Launch, feed, sell, and claim each open a confirm step with the quote: tokens or USDC out, the fee split, the creator haircut where it applies, the hunger-adjusted payout on a sale, and the 2% minimum. The wallet opens after confirm. The factory view `quote_launch` prices a seed. Buys, sales, and claims use `quote_buy`, `quote_sell`, and `quote_claim`.
 
@@ -236,20 +238,20 @@ The wasm is the same. Only init config changes. The public testnet factory uses 
 
 | | Public testnet | Script default (legacy) | Mainnet |
 | --- | --- | --- | --- |
-| Factory | `pump.nearbowl.testnet` | `factory.nearbowl.testnet` | `*.near` |
+| Factory | `pet.nearbowl.testnet` | `factory.nearbowl.testnet` | `*.near` |
 | USDC account | `tusdc.nearbowl.testnet` | `tusdc.nearbowl.testnet` | `17208628f84f5d6ad33f0da3bbbeb27ffcb398eac501a31bd6ad2011e36133a1` |
-| Initial life / hunger reference | 30 minutes | 45 seconds | 24 hours |
-| Extension | 60 seconds per USDC | 2 seconds per USDC | 360 seconds per USDC |
-| Life cap | 1–3 hours | 180–540 seconds | 24–72 hours |
-| Twilight | 5 minutes | 10 seconds | 2 hours |
-| Bucket tiers | 10 minutes, then 10 minutes | 60 seconds, then 60 seconds | 6 hours, then 6 hours |
-| Scar step | 3 seconds | 3 seconds | 90 minutes |
+| Initial life / hunger reference | 24 hours | 45 seconds | 24 hours |
+| Extension | 360 seconds per USDC | 2 seconds per USDC | 360 seconds per USDC |
+| Life cap | 48–72 hours | 180–540 seconds | 24–72 hours |
+| Twilight | 2 hours | 10 seconds | 2 hours |
+| Bucket tiers | 6 hours, then 6 hours | 60 seconds, then 60 seconds | 6 hours, then 6 hours |
+| Scar step | 90 minutes | 3 seconds | 90 minutes |
 | Minimum seed | 1 USDC | 1 USDC | 10 USDC |
 | `allow_demo_controls` | **`false`** | `true` (legacy only) | **`false`** |
 
-`ext_ns_per_raw_usdc` is nanoseconds per raw USDC unit: `60_000` on the public testnet factory (60 seconds per whole USDC), `360_000` in production (360 seconds per whole USDC), and `2_000` on the legacy short timer. Fee shares stay 50 / 30 / 20 bps inside the 100 bps fee. `creator_haircut_bps` stays 5000.
+`ext_ns_per_raw_usdc` is nanoseconds per raw USDC unit: `360_000` on the public testnet factory and in production (360 seconds per whole USDC), and `2_000` on the legacy short timer. Fee shares stay 50 / 30 / 20 bps inside the 100 bps fee. `creator_haircut_bps` stays 5000.
 
-There is no mainnet deployment in this repository. A mainnet factory must be initialized with `allow_demo_controls: false`. The deploy script exits if the network is mainnet. On testnet it leaves timer controls off unless `ALLOW_DEMO_CONTROLS=true`, and it refuses that flag for `pump.nearbowl.testnet`.
+There is no mainnet deployment in this repository. A mainnet factory must be initialized with `allow_demo_controls: false`. The deploy script exits if the network is mainnet. On testnet it leaves timer controls off unless `ALLOW_DEMO_CONTROLS=true`, and it refuses that flag for `pet.nearbowl.testnet`.
 
 ## Known limitations
 

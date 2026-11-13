@@ -99,7 +99,7 @@ const TIMER_ENV = [
   ["TIER2_NS", "tier2_ns"],
 ];
 
-export const PUBLIC_FACTORY_ID = "pump.nearbowl.testnet";
+export const PUBLIC_FACTORY_ID = "pet.nearbowl.testnet";
 export const LEGACY_FACTORY_ID = "factory.nearbowl.testnet";
 
 /**

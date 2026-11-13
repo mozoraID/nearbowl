@@ -8,9 +8,9 @@
  *   DEPLOYER_PRIVATE_KEY=ed25519:...
  *   # or NEAR_CREDENTIALS_FILE=./credentials.json
  *
- * Default sub-account names: pump.<deployer> and tusdc.<deployer>
+ * Default sub-account names: pet.<deployer> and tusdc.<deployer>
  * (override with FACTORY_ACCOUNT_ID and TUSDC_ACCOUNT_ID).
- * The public factory is pump.nearbowl.testnet, created from nearbowl.testnet,
+ * The public factory is pet.nearbowl.testnet, created from nearbowl.testnet,
  * with timer controls off. factory.nearbowl.testnet is the legacy short-timer
  * factory and is not used by the app. Timer env vars and ALLOW_DEMO_CONTROLS
  * apply only when the factory account is created.
@@ -20,7 +20,7 @@ import { actions } from "near-api-js";
 import { LEGACY_FACTORY_ID, PUBLIC_FACTORY_ID, account, call, demoParamsFromEnv, exists, loadSigner, near, optional, send } from "./lib.mjs";
 
 const { rpc, accountId, key, account: deployer } = loadSigner();
-const factoryId = optional("FACTORY_ACCOUNT_ID", `pump.${accountId}`);
+const factoryId = optional("FACTORY_ACCOUNT_ID", `pet.${accountId}`);
 const tusdcId = optional("TUSDC_ACCOUNT_ID", `tusdc.${accountId}`);
 const root = new URL("..", import.meta.url);
 const factoryWasm = readFileSync(new URL("target/wasm32-unknown-unknown/release/nearbowl_factory.wasm", root));
