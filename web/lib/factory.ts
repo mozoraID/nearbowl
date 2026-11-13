@@ -1,6 +1,6 @@
 import { config } from "./config";
 import { view } from "./near";
-import type { CoinView, ConfigView, SolvencyView, TradeView } from "./types";
+import type { CoinView, ConfigView, QuoteLaunch, SolvencyView, TradeView } from "./types";
 
 export function listCoins(status: "alive" | "dead", fromIndex = 0, limit = 50): Promise<CoinView[]> {
   return view<CoinView[]>(config.factoryAccountId, "list_coins", {
@@ -16,6 +16,10 @@ export function getSolvency(): Promise<SolvencyView> {
 
 export function getConfig(): Promise<ConfigView> {
   return view<ConfigView>(config.factoryAccountId, "get_params", {});
+}
+
+export function quoteLaunch(usdcIn: string): Promise<QuoteLaunch> {
+  return view<QuoteLaunch>(config.factoryAccountId, "quote_launch", { usdc_in: usdcIn });
 }
 
 export function getRecentTrades(coinId: string): Promise<TradeView[]> {

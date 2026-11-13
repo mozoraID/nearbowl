@@ -2,6 +2,7 @@
 
 import { FaucetButton } from "@/components/FaucetButton";
 import { CoinArt } from "@/components/CoinArt";
+import { ReviewCard } from "@/components/ReviewCard";
 import { TimeRing } from "@/components/TimeRing";
 import { useToast } from "@/components/Toast";
 import { useWallet } from "@/components/Wallet";
@@ -23,6 +24,8 @@ import {
   shortAccount,
 } from "@/lib/format";
 import { view } from "@/lib/near";
+import { matchTrade, useReceipts } from "@/lib/receipts";
+import { applySlippage, slippageLabel } from "@/lib/trade";
 import type { CoinView, PositionView, QuoteBuy, QuoteClaim, QuoteSell, StorageView, TradeView } from "@/lib/types";
 import Link from "next/link";
 import { useEffect, useState } from "react";
@@ -32,6 +35,7 @@ export function CoinScreen({ id }: { id: string }) {
   const validId = Number.isInteger(coinId) && coinId >= 0;
   const { accountId, call, connect } = useWallet();
   const push = useToast();
+  const receipts = useReceipts();
   const [coin, setCoin] = useState<CoinView | null>(null);
   const [position, setPosition] = useState<PositionView | null>(null);
   const [trades, setTrades] = useState<TradeView[]>([]);
@@ -47,6 +51,7 @@ export function CoinScreen({ id }: { id: string }) {
   const [remaining, setRemaining] = useState(0n);
   const [pulse, setPulse] = useState(false);
   const [revision, setRevision] = useState(0);
+  const [review, setReview] = useState<null | "buy" | "sell" | "claim">(null);
 
   useEffect(() => {
     if (!validId) return;
@@ -219,7 +224,7 @@ export function CoinScreen({ id }: { id: string }) {
     }
     const usdcStorage = await view<StorageView | null>(config.usdcAccountId, "storage_balance_of", { account_id: accountId });
     if (!usdcStorage) {
-      const result = await call(config.usdcAccountId, "storage_deposit", { account_id: accountId }, USDC_STORAGE_YOCTO, "40000000000000");
+      const result = await call(config.usdcAccountId, "storage_deposit", { account_id: accountId }, USDC_STORAGE_YOCTO, "40000000000000", { kind: "storage" });
       push({
         tone: "ok",
         title: "Registered on USDC",
@@ -230,7 +235,7 @@ export function CoinScreen({ id }: { id: string }) {
     }
     const factoryStorage = await view<StorageView | null>(config.factoryAccountId, "storage_balance_of", { account_id: accountId });
     if (!factoryStorage || BigInt(factoryStorage.available) < 2_000_000_000_000_000_000_000n) {
-      const result = await call(config.factoryAccountId, "storage_deposit", {}, TRADE_STORAGE_YOCTO, "40000000000000");
+      const result = await call(config.factoryAccountId, "storage_deposit", {}, TRADE_STORAGE_YOCTO, "40000000000000", { kind: "storage" });
       push({
         tone: "ok",
         title: "Storage deposited",
@@ -251,12 +256,14 @@ export function CoinScreen({ id }: { id: string }) {
     setPending(true);
     try {
       if (!(await ensureReady())) return;
-      const quote = await view<QuoteBuy>(config.factoryAccountId, "quote_buy", {
-        coin_id: coinId,
-        usdc_in: raw,
-        account_id: accountId,
-      });
-      const minOut = (BigInt(quote.tokens_out) * 98n) / 100n;
+      const quote =
+        buyQuote ??
+        (await view<QuoteBuy>(config.factoryAccountId, "quote_buy", {
+          coin_id: coinId,
+          usdc_in: raw,
+          account_id: accountId,
+        }));
+      const minOut = applySlippage(quote.tokens_out);
       const result = await call(
         config.usdcAccountId,
         "ft_transfer_call",
@@ -264,10 +271,11 @@ export function CoinScreen({ id }: { id: string }) {
           receiver_id: config.factoryAccountId,
           amount: raw,
           memo: null,
-          msg: JSON.stringify({ action: "buy", coin_id: id, min_tokens_out: minOut.toString() }),
+          msg: JSON.stringify({ action: "buy", coin_id: id, min_tokens_out: minOut }),
         },
         "1",
         "200000000000000",
+        { kind: "buy", coinId: id, usdc: raw, tokens: quote.tokens_out },
       );
       push({
         tone: "ok",
@@ -289,14 +297,15 @@ export function CoinScreen({ id }: { id: string }) {
     setPending(true);
     try {
       if (!(await ensureReady())) return;
-      const quote = await view<QuoteSell>(config.factoryAccountId, "quote_sell", { coin_id: coinId, tokens_in: tokens });
-      const minOut = (BigInt(quote.usdc_out_net) * 98n) / 100n;
+      const quote = sellQuote ?? (await view<QuoteSell>(config.factoryAccountId, "quote_sell", { coin_id: coinId, tokens_in: tokens }));
+      const minOut = applySlippage(quote.usdc_out_net);
       const result = await call(
         config.factoryAccountId,
         "sell",
-        { coin_id: coinId, tokens_in: tokens, min_usdc_out: minOut.toString() },
+        { coin_id: coinId, tokens_in: tokens, min_usdc_out: minOut },
         "1",
         "80000000000000",
+        { kind: "sell", coinId: id, usdc: quote.usdc_out_gross, tokens },
       );
       push({
         tone: "ok",
@@ -319,7 +328,11 @@ export function CoinScreen({ id }: { id: string }) {
     }
     setPending(true);
     try {
-      const result = await call(config.factoryAccountId, "claim", { coin_id: coinId }, "1", "80000000000000");
+      const result = await call(config.factoryAccountId, "claim", { coin_id: coinId }, "1", "80000000000000", {
+        kind: "claim",
+        coinId: id,
+        usdc: claimQuote?.usdc_out,
+      });
       push({
         tone: "ok",
         title: "Claim sent",
@@ -337,7 +350,7 @@ export function CoinScreen({ id }: { id: string }) {
   async function withdrawFees() {
     setPending(true);
     try {
-      const result = await call(config.factoryAccountId, "withdraw_creator_fees", { coin_id: coinId }, "1", "80000000000000");
+      const result = await call(config.factoryAccountId, "withdraw_creator_fees", { coin_id: coinId }, "1", "80000000000000", { kind: "transaction", coinId: id });
       push({
         tone: "ok",
         title: "Fee withdrawal sent",
@@ -481,7 +494,12 @@ export function CoinScreen({ id }: { id: string }) {
               className="card form"
               onSubmit={(event) => {
                 event.preventDefault();
-                void buy();
+                if (!accountId) {
+                  connect();
+                  return;
+                }
+                if (!buyQuote) return;
+                setReview("buy");
               }}
             >
               <h2>Feed</h2>
@@ -510,10 +528,32 @@ export function CoinScreen({ id }: { id: string }) {
                 ) : null}
               </div>
               <FaucetButton />
-              <button className="solid" disabled={pending} type="submit">
-                {pending ? "Sending…" : accountId ? "Buy" : "Connect to buy"}
-              </button>
-              <p className="hint">The trade includes a 2% slippage bound. A quote that moves further is rejected.</p>
+              {review === "buy" && buyQuote ? (
+                <ReviewCard
+                  title="Confirm feed"
+                  confirmLabel="Confirm feed"
+                  pending={pending}
+                  onBack={() => setReview(null)}
+                  onConfirm={() => void buy()}
+                  lines={[
+                    { k: "You pay", v: `${formatUsdc(parseUsdc(buyAmount) ?? "0")} tUSDC` },
+                    { k: "You receive", v: `about ${formatTokens(buyQuote.tokens_out)} tokens` },
+                    { k: "Fee, stays in the bowl", v: `${formatUsdc(buyQuote.fee_split.inherit)} tUSDC` },
+                    { k: "Protocol fee", v: `${formatUsdc(buyQuote.fee_split.protocol)} tUSDC` },
+                    { k: "Creator fee", v: `${formatUsdc(buyQuote.fee_split.creator)} tUSDC` },
+                    { k: "To the curve", v: `${formatUsdc(buyQuote.fee_split.to_curve)} tUSDC` },
+                    { k: "Time added", v: formatDuration(BigInt(buyQuote.extension_ns)) },
+                    { k: "Timer after", v: formatDuration(BigInt(buyQuote.new_remaining_ns)) },
+                    { k: "Creator haircut", v: "None on a buy. The 50% cut applies only to the creator seed at death." },
+                    { k: `Minimum tokens (${slippageLabel()})`, v: formatTokens(applySlippage(buyQuote.tokens_out)) },
+                  ]}
+                />
+              ) : (
+                <button className="solid" disabled={pending || !buyQuote} type="submit">
+                  {pending ? "Sending…" : accountId ? "Review feed" : "Connect to buy"}
+                </button>
+              )}
+              <p className="hint">Confirm shows the quote, the fee split, and the {slippageLabel()} minimum. A worse fill is rejected.</p>
             </form>
           ) : null}
 
@@ -522,7 +562,8 @@ export function CoinScreen({ id }: { id: string }) {
               className="card form"
               onSubmit={(event) => {
                 event.preventDefault();
-                void sell();
+                if (!sellQuote) return;
+                setReview("sell");
               }}
             >
               <h2>Sell</h2>
@@ -544,9 +585,32 @@ export function CoinScreen({ id }: { id: string }) {
                   <p className="hint">Buy some tokens before selling. Seed tokens cannot be sold.</p>
                 ) : null}
               </div>
-              <button className="ghost sell-btn" disabled={pending || !sellQuote} type="submit">
-                {pending ? "Sending…" : "Sell"}
-              </button>
+              {review === "sell" && sellQuote && position ? (
+                <ReviewCard
+                  title="Confirm sale"
+                  confirmLabel="Confirm sale"
+                  pending={pending}
+                  onBack={() => setReview(null)}
+                  onConfirm={() => void sell()}
+                  lines={[
+                    { k: "Tokens sold", v: formatTokens(parseTokenFraction(position.balance, sellPercent)) },
+                    { k: "Hunger", v: `${sellQuote.w_n}/64 (${hungerPercent(sellQuote.w_n)}%)` },
+                    { k: "Curve value, before fees", v: `${formatUsdc(sellQuote.curve_value)} tUSDC` },
+                    { k: "Pro-rata, before fees", v: `${formatUsdc(sellQuote.prorata_value)} tUSDC` },
+                    { k: "Hunger-adjusted gross", v: `${formatUsdc(sellQuote.usdc_out_gross)} tUSDC` },
+                    { k: "Fee, stays in the bowl", v: `${formatUsdc(sellQuote.fee_split.inherit)} tUSDC` },
+                    { k: "Protocol fee", v: `${formatUsdc(sellQuote.fee_split.protocol)} tUSDC` },
+                    { k: "Creator fee", v: `${formatUsdc(sellQuote.fee_split.creator)} tUSDC` },
+                    { k: "You receive", v: `${formatUsdc(sellQuote.usdc_out_net)} tUSDC` },
+                    { k: "Creator haircut", v: "None on a sale. Seed tokens cannot be sold." },
+                    { k: `Minimum USDC (${slippageLabel()})`, v: formatUsdc(applySlippage(sellQuote.usdc_out_net)) },
+                  ]}
+                />
+              ) : (
+                <button className="ghost sell-btn" disabled={pending || !sellQuote} type="submit">
+                  {pending ? "Sending…" : "Review sale"}
+                </button>
+              )}
             </form>
           ) : (
             <div className="card form">
@@ -564,9 +628,43 @@ export function CoinScreen({ id }: { id: string }) {
                   <p className="hint">Connect to see your share.</p>
                 )}
               </div>
-              <button type="button" className="solid" disabled={pending} onClick={() => void claim()}>
-                {pending ? "Sending…" : accountId ? "Claim" : "Connect to claim"}
-              </button>
+              {review === "claim" && claimQuote ? (
+                <ReviewCard
+                  title="Confirm claim"
+                  confirmLabel="Confirm claim"
+                  pending={pending}
+                  onBack={() => setReview(null)}
+                  onConfirm={() => void claim()}
+                  lines={[
+                    { k: "You receive", v: `${formatUsdc(claimQuote.usdc_out)} tUSDC` },
+                    { k: "Protocol haircut", v: `${formatUsdc(claimQuote.haircut)} tUSDC` },
+                    {
+                      k: "Creator seed",
+                      v:
+                        claimQuote.haircut !== "0" || position?.is_creator
+                          ? "The seed share is cut in half. Bought tokens are paid in full."
+                          : "No seed on this account. Bought tokens are paid in full, with no haircut.",
+                    },
+                    { k: "Minimum output", v: "No slippage. The claim is your share of the death snapshot." },
+                  ]}
+                />
+              ) : (
+                <button
+                  type="button"
+                  className="solid"
+                  disabled={pending || (Boolean(accountId) && !claimQuote)}
+                  onClick={() => {
+                    if (!accountId) {
+                      connect();
+                      return;
+                    }
+                    if (!claimQuote) return;
+                    setReview("claim");
+                  }}
+                >
+                  {pending ? "Sending…" : accountId ? "Review claim" : "Connect to claim"}
+                </button>
+              )}
             </div>
           )}
 
@@ -624,20 +722,42 @@ export function CoinScreen({ id }: { id: string }) {
         <section className="card span-2">
           <h2>Recent trades</h2>
           {trades.length === 0 ? <p className="hint">No trades yet. The first feed shows up here. The contract keeps a ring of the latest 30.</p> : null}
+          <p className="hint">
+            {receipts.some((row) => row.coinId === id)
+              ? "Trades you sent from this browser link to the transaction when the amounts match."
+              : "The factory does not store transaction hashes. Trades link to the account and the factory on the explorer. After you buy, sell, or claim here, this browser keeps the hash."}
+          </p>
           <ul className="trades">
-            {trades.map((trade, index) => (
-              <li className="trade" key={`${trade.ts}-${trade.account_id}-${index}`}>
-                <span className={`pill pill-${trade.side}`}>{trade.side}</span>
-                <a href={accountUrl(trade.account_id)} target="_blank" rel="noreferrer">
-                  {shortAccount(trade.account_id)}
-                </a>
-                <span>
-                  {formatUsdc(trade.usdc)} USDC · {formatTokens(trade.tokens, 4)} tokens
-                  {trade.side === "buy" && trade.ext_s > 0 ? ` · +${trade.ext_s}s` : ""}
-                </span>
-                <time>{formatAgo(trade.ts)}</time>
-              </li>
-            ))}
+            {trades.map((trade, index) => {
+              const saved = matchTrade(coin.coin_id, trade);
+              return (
+                <li className="trade" key={`${trade.ts}-${trade.account_id}-${index}`}>
+                  <span className={`pill pill-${trade.side}`}>{trade.side}</span>
+                  <a href={accountUrl(trade.account_id)} target="_blank" rel="noreferrer">
+                    {shortAccount(trade.account_id)}
+                  </a>
+                  <span>
+                    {formatUsdc(trade.usdc)} USDC · {formatTokens(trade.tokens, 4)} tokens
+                    {trade.side === "buy" && trade.ext_s > 0 ? ` · +${trade.ext_s}s` : ""}
+                  </span>
+                  <time>{formatAgo(trade.ts)}</time>
+                  {saved ? (
+                    <a href={txUrl(saved.hash)} target="_blank" rel="noreferrer">
+                      Transaction
+                    </a>
+                  ) : (
+                    <span className="trade-links">
+                      <a href={accountUrl(trade.account_id)} target="_blank" rel="noreferrer">
+                        Account activity
+                      </a>
+                      <a href={accountUrl(config.factoryAccountId)} target="_blank" rel="noreferrer">
+                        Factory activity
+                      </a>
+                    </span>
+                  )}
+                </li>
+              );
+            })}
           </ul>
         </section>
       </div>

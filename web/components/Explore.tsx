@@ -277,15 +277,20 @@ export function Explore() {
             <div className="card empty-hero">
               <Pet mood="hungry" size="md" />
               <div>
-                <h3>Nothing is alive right now.</h3>
+                <h3>The bowl is quiet.</h3>
                 <p>
                   {lifeLabel
-                    ? `Each coin on this factory starts with ${lifeLabel} of life, so pets reach the graveyard quickly. Launch one and feed it before the timer runs out.`
-                    : "Launch one and feed it before the timer runs out."}
+                    ? `Nothing is ticking right now. A new coin starts with ${lifeLabel} of life, and this list only keeps the ones still fed. Launch one, or walk through a full cycle: free tUSDC, a small seed, one feed, then a sale or a claim after it rests.`
+                    : "Nothing is ticking right now. Launch a coin, or walk through one full cycle from Get started."}
                 </p>
-                <Link className="solid" href="/launch">
-                  Launch the first one
-                </Link>
+                <div className="action-row">
+                  <Link className="solid" href="/launch">
+                    Launch a coin
+                  </Link>
+                  <Link className="ghost" href="/start#cycle">
+                    Try one cycle
+                  </Link>
+                </div>
               </div>
             </div>
           ) : null}

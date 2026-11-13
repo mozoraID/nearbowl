@@ -18,7 +18,7 @@ export function optional(name, fallback = "") {
 export function loadSigner() {
   const network = optional("NEAR_NETWORK_ID", "testnet");
   if (network === "mainnet") {
-    console.error("Refusing to run: this script targets testnet. allow_demo_controls must be false on mainnet, and this script always turns it on.");
+    console.error("Refusing to run: this script targets testnet. A mainnet factory is initialized with allow_demo_controls set to false, outside this script.");
     process.exit(1);
   }
   const rpc = optional("NEAR_RPC_URL", "https://test.rpc.fastnear.com");
@@ -99,9 +99,16 @@ const TIMER_ENV = [
   ["TIER2_NS", "tier2_ns"],
 ];
 
-/** Demo defaults, with optional timer overrides from the environment. */
+export const PUBLIC_FACTORY_ID = "pump.nearbowl.testnet";
+export const LEGACY_FACTORY_ID = "factory.nearbowl.testnet";
+
+/**
+ * Demo-shaped defaults, with timer overrides from the environment.
+ * Timer controls are off unless ALLOW_DEMO_CONTROLS=true. That flag is only
+ * for the legacy short-timer factory. The public factory leaves it false.
+ */
 export function demoParamsFromEnv() {
-  const params = { ...DEMO_PARAMS };
+  const params = { ...DEMO_PARAMS, allow_demo_controls: false };
   const applied = [];
   for (const [name, key] of TIMER_ENV) {
     const raw = optional(name, "").trim();
@@ -112,6 +119,12 @@ export function demoParamsFromEnv() {
     params[key] = raw;
     applied.push(`${name}=${raw}`);
   }
+  const flag = optional("ALLOW_DEMO_CONTROLS", "false").trim().toLowerCase();
+  if (flag !== "true" && flag !== "false") {
+    throw new Error("ALLOW_DEMO_CONTROLS must be true or false");
+  }
+  params.allow_demo_controls = flag === "true";
+  if (params.allow_demo_controls) applied.push("ALLOW_DEMO_CONTROLS=true");
   if (BigInt(params.max_life_max_ns) < BigInt(params.max_life_min_ns)) {
     throw new Error("MAX_LIFE_MAX_NS is below MAX_LIFE_MIN_NS");
   }

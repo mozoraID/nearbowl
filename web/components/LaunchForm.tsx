@@ -3,17 +3,18 @@
 import { CoinArt } from "@/components/CoinArt";
 import { FaucetButton } from "@/components/FaucetButton";
 import { ImageUpload, type CoinImageField } from "@/components/ImageUpload";
+import { ReviewCard } from "@/components/ReviewCard";
 import { useToast } from "@/components/Toast";
 import { useWallet } from "@/components/Wallet";
 import { config, LAUNCH_STORAGE_YOCTO, USDC_STORAGE_YOCTO } from "@/lib/config";
 import { humanError } from "@/lib/errors";
 import { txUrl } from "@/lib/explorer";
-import { getConfig } from "@/lib/factory";
-import { formatDuration, formatTokens, formatUsdc, parseUsdc, seedPreview } from "@/lib/format";
+import { getConfig, quoteLaunch } from "@/lib/factory";
+import { formatDuration, formatTokens, formatUsdc, marketCapRaw, parseUsdc, seedPreview } from "@/lib/format";
 import { safeCoinImage } from "@/lib/image";
 import { view } from "@/lib/near";
 import { symbolProblem } from "@/lib/reserved";
-import type { StorageView } from "@/lib/types";
+import type { QuoteLaunch, StorageView } from "@/lib/types";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 
@@ -41,6 +42,8 @@ export function LaunchForm() {
   const [initialLife, setInitialLife] = useState<bigint | null>(null);
   const [pending, setPending] = useState(false);
   const [submitted, setSubmitted] = useState(false);
+  const [reviewing, setReviewing] = useState(false);
+  const [launchQuote, setLaunchQuote] = useState<QuoteLaunch | null>(null);
 
   const localSymbol = symbol.trim() ? symbolProblem(symbol) : null;
   const nameError = nameProblem(name);
@@ -49,6 +52,11 @@ export function LaunchForm() {
   const seedError = parsedSeed === null ? "Use a number with up to 6 decimals." : BigInt(parsedSeed) < minSeed ? `Seed at least ${formatUsdc(minSeed.toString())} USDC.` : null;
   const preview = parsedSeed && !seedError ? seedPreview(parsedSeed) : null;
   const needsStorage = Boolean(accountId) && storage !== undefined && (storage === null || BigInt(storage) < BigInt(LAUNCH_STORAGE_YOCTO));
+
+  useEffect(() => {
+    const seedParam = new URLSearchParams(window.location.search).get("seed");
+    if (seedParam && /^\d+(\.\d{0,6})?$/.test(seedParam)) setSeed(seedParam);
+  }, []);
 
   useEffect(() => {
     let stop = false;
@@ -63,6 +71,24 @@ export function LaunchForm() {
       stop = true;
     };
   }, []);
+
+  useEffect(() => {
+    if (!parsedSeed || seedError) {
+      setLaunchQuote(null);
+      return;
+    }
+    let stop = false;
+    quoteLaunch(parsedSeed)
+      .then((quote) => {
+        if (!stop) setLaunchQuote(quote);
+      })
+      .catch(() => {
+        if (!stop) setLaunchQuote(null);
+      });
+    return () => {
+      stop = true;
+    };
+  }, [parsedSeed, seedError]);
 
   useEffect(() => {
     if (localSymbol || !symbol.trim()) {
@@ -109,7 +135,7 @@ export function LaunchForm() {
     }
     setPending(true);
     try {
-      const result = await call(config.factoryAccountId, "storage_deposit", {}, LAUNCH_STORAGE_YOCTO, "40000000000000");
+      const result = await call(config.factoryAccountId, "storage_deposit", {}, LAUNCH_STORAGE_YOCTO, "40000000000000", { kind: "storage" });
       push({
         tone: "ok",
         title: "Storage deposited",
@@ -147,7 +173,7 @@ export function LaunchForm() {
     try {
       const usdcStorage = await view<StorageView | null>(config.usdcAccountId, "storage_balance_of", { account_id: accountId });
       if (!usdcStorage) {
-        const result = await call(config.usdcAccountId, "storage_deposit", { account_id: accountId }, USDC_STORAGE_YOCTO, "40000000000000");
+        const result = await call(config.usdcAccountId, "storage_deposit", { account_id: accountId }, USDC_STORAGE_YOCTO, "40000000000000", { kind: "storage" });
         push({
           tone: "ok",
           title: "Registered on USDC",
@@ -171,6 +197,7 @@ export function LaunchForm() {
         },
         "1",
         "200000000000000",
+        { kind: "launch", usdc: parsedSeed, tokens: (launchQuote?.tokens_out ?? preview?.supplyRaw) || undefined },
       );
       push({
         tone: "ok",
@@ -234,7 +261,13 @@ export function LaunchForm() {
         className="card form launch-form"
         onSubmit={(event) => {
           event.preventDefault();
-          void launch();
+          setSubmitted(true);
+          if (!accountId) {
+            connect();
+            return;
+          }
+          if (nameError || imageError || picture.busy || seedError || !symbolOk || !parsedSeed) return;
+          setReviewing(true);
         }}
       >
         <label>
@@ -259,9 +292,40 @@ export function LaunchForm() {
             Deposit 0.06 NEAR for storage
           </button>
         ) : null}
-        <button className="solid" type="submit" disabled={pending || picture.busy || Boolean(imageError) || (symbol.trim().length > 0 && !symbolOk)}>
-          {pending ? "Sending…" : accountId ? "Launch" : "Connect to launch"}
-        </button>
+        {reviewing && parsedSeed && !seedError ? (
+          <ReviewCard
+            title="Confirm launch"
+            confirmLabel="Confirm launch"
+            pending={pending}
+            onBack={() => setReviewing(false)}
+            onConfirm={() => void launch()}
+            lines={[
+              { k: "You send", v: `${formatUsdc(parsedSeed)} tUSDC` },
+              { k: "Launch fee", v: `${formatUsdc(launchQuote?.fee_usdc ?? "0")} tUSDC` },
+              { k: "Pool", v: `${formatUsdc(launchQuote?.reserve ?? parsedSeed)} tUSDC, the full seed` },
+              { k: "Seed tokens", v: `${formatTokens((launchQuote?.tokens_out ?? preview?.supplyRaw) || "0")} claim-only` },
+              { k: "Start price", v: `${formatUsdc((launchQuote?.price ?? preview?.priceRaw) || "0", 4)} tUSDC` },
+              { k: "Market cap", v: `${formatUsdc(marketCapRaw(parsedSeed), 2)} tUSDC` },
+              {
+                k: "Timer starts at",
+                v: launchQuote
+                  ? formatDuration(BigInt(launchQuote.initial_life_ns))
+                  : initialLife !== null
+                    ? formatDuration(initialLife)
+                    : "this factory's initial life",
+              },
+              {
+                k: "Creator haircut",
+                v: `${((launchQuote?.creator_haircut_bps ?? 5000) / 100).toString()}% of the seed claim at death. Bought tokens are not cut.`,
+              },
+              { k: "Minimum output", v: "No slippage. The seed amount is fixed by the curve." },
+            ]}
+          />
+        ) : (
+          <button className="solid" type="submit" disabled={pending || picture.busy || Boolean(imageError) || (symbol.trim().length > 0 && !symbolOk)}>
+            {pending ? "Sending…" : accountId ? "Review launch" : "Connect to launch"}
+          </button>
+        )}
         {submitted && (nameError || imageError || seedError || !symbolOk) ? (
           <p className="hint warn" role="alert">
             Fix the fields above before sending the seed.

@@ -494,6 +494,30 @@ async fn demo_controls_rejected_when_disabled() -> anyhow::Result<()> {
     let factory = deploy_factory(&worker, &owner, &tusdc, false)
         .await
         .context("factory")?;
+    let params: Value = factory
+        .view("get_params")
+        .args_json(json!({}))
+        .await?
+        .json()?;
+    assert_eq!(params["params"]["allow_demo_controls"], false);
+    let quote: Value = factory
+        .view("quote_launch")
+        .args_json(json!({"usdc_in": (100 * ONE).to_string()}))
+        .await?
+        .json()?;
+    assert_eq!(quote["tokens_out"], "14142135623730950488");
+    assert_eq!(quote["price"], "14142135");
+    assert_eq!(quote["fee_usdc"], "0");
+    assert_eq!(quote["creator_haircut_bps"], 5000);
+    assert_eq!(quote["initial_life_ns"], "45000000000");
+    let tiny = factory
+        .view("quote_launch")
+        .args_json(json!({"usdc_in": "1"}))
+        .await;
+    assert!(
+        tiny.is_err(),
+        "a seed below the minimum must fail quote_launch"
+    );
     let res = owner
         .call(factory.id(), "demo_set_remaining")
         .args_json(json!({"coin_id": 1, "remaining_ns": "1"}))

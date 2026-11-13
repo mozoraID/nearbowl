@@ -1,9 +1,14 @@
 #!/usr/bin/env node
 /**
- * Run the NearBowl demo on testnet and print expected numbers next to the chain.
+ * Legacy walkthrough for the short-timer factory only.
  *
- * Uses the short demo timers. The owner calls demo_set_remaining, which holds
- * the contract clock for 120 seconds so the hungry sell sees exactly 30s left.
+ * This is not the public factory. It calls demo_set_remaining, which exists
+ * only while timer controls are on. Point it at factory.nearbowl.testnet
+ * (or LEGACY_FACTORY_ACCOUNT_ID). FACTORY_ACCOUNT_ID is the public factory
+ * and is ignored here.
+ *
+ * The owner call holds the contract clock for 120 seconds so the hungry sell
+ * sees exactly 30s left on the 45 second timer.
  *
  * Accounts (override with DEMO_ALICE_ID, DEMO_BOB_ID, DEMO_CAROL_ID):
  *   creator = DEPLOYER_ACCOUNT_ID
@@ -12,11 +17,17 @@
  *   carol   = carol.<deployer>
  * The deploy script creates those sub-accounts with the same key.
  */
-import { account, call, loadSigner, near, optional, send, view } from "./lib.mjs";
+import { LEGACY_FACTORY_ID, PUBLIC_FACTORY_ID, account, call, loadSigner, near, optional, send, view } from "./lib.mjs";
 
 const { rpc, accountId, key, account: owner } = loadSigner();
 const secret = key.toString();
-const factoryId = optional("FACTORY_ACCOUNT_ID", `factory.${accountId}`);
+const publicId = optional("FACTORY_ACCOUNT_ID", PUBLIC_FACTORY_ID);
+const factoryId = optional("LEGACY_FACTORY_ACCOUNT_ID", LEGACY_FACTORY_ID);
+if (factoryId === publicId) {
+  console.error(`Refusing to run the legacy walkthrough on the public factory ${publicId}.`);
+  console.error(`Set LEGACY_FACTORY_ACCOUNT_ID to the short-timer factory (${LEGACY_FACTORY_ID}).`);
+  process.exit(1);
+}
 const tusdcId = optional("TUSDC_ACCOUNT_ID", `tusdc.${accountId}`);
 const creator = account(optional("DEMO_CREATOR_ID", accountId), rpc, secret);
 const alice = account(optional("DEMO_ALICE_ID", `alice.${accountId}`), rpc, secret);
@@ -85,8 +96,18 @@ async function buy(who, whole) {
   ]);
 }
 
-console.log("NearBowl demo");
-console.log(`factory ${factoryId}`);
+console.log("NearBowl legacy walkthrough (not the public factory)");
+console.log(`legacy factory ${factoryId}`);
+console.log(`public factory ${publicId} is left alone`);
+const legacyParams = await view(rpc, factoryId, "get_params", {});
+if (!legacyParams?.params?.allow_demo_controls) {
+  console.error(`${factoryId} has timer controls off. This walkthrough needs the legacy factory.`);
+  process.exit(1);
+}
+if (legacyParams.params.initial_life_ns !== "45000000000") {
+  console.error(`${factoryId} initial life is ${legacyParams.params.initial_life_ns}, not the 45s legacy timer. The printed numbers would not match.`);
+  process.exit(1);
+}
 await register(creator);
 await register(alice);
 await register(bob);

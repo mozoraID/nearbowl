@@ -389,6 +389,27 @@ fn slippage_refunds_the_whole_buy() {
 }
 
 #[test]
+fn quote_launch_matches_seed_supply() {
+    let c = boot(false);
+    assert!(!c.get_params().params.allow_demo_controls);
+    let q = c.quote_launch(U128(100 * ONE_USDC));
+    assert_eq!(q.tokens_out.0, 14_142_135_623_730_950_488);
+    assert_eq!(q.price.0, 14_142_135);
+    assert_eq!(q.reserve.0, 100 * ONE_USDC);
+    assert_eq!(q.fee_usdc.0, 0);
+    assert_eq!(q.creator_haircut_bps, 5000);
+    assert_eq!(q.initial_life_ns.0, 45_000_000_000);
+    assert_eq!(q.min_seed_usdc.0, ONE_USDC);
+}
+
+#[test]
+#[should_panic(expected = "SeedTooSmall")]
+fn quote_launch_rejects_a_tiny_seed() {
+    let c = boot(false);
+    c.quote_launch(U128(1));
+}
+
+#[test]
 #[should_panic(expected = "DemoControlsDisabled")]
 fn demo_controls_are_rejected_when_disabled() {
     let mut c = boot(false);
