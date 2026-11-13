@@ -177,6 +177,8 @@ The UI has a testnet banner, a tUSDC faucet, Explore (alive coins and a Graveyar
 
 Coin pictures are optional. Launch uploads them from the browser with `@vercel/blob/client` through `/api/upload`. The route allows PNG, JPEG, WebP, and GIF, caps the file at 2 MB, and stores it under `coins/` with a random suffix. `BLOB_READ_WRITE_TOKEN` stays on the server. Without that token the form says so, and the pet art is used. The factory keeps `image_uri` to 200 characters.
 
+Page views are tracked with Vercel Web Analytics.
+
 ## Mainnet
 
 The wasm is the same. Only init config changes. The Testnet column is the script's short demo timer, also used by the earlier factory `factory.nearbowl.testnet`. The public factory `bowl.nearbowl.testnet` uses the longer timers in [Deploy to testnet](#deploy-to-testnet).
