@@ -109,10 +109,10 @@ export function StartGuide() {
     };
   }, [accountId, mine]);
 
-  const life = duration(params?.initial_life_ns, "30m");
-  const perUsdc = params ? extensionPerUsdc(params.ext_ns_per_raw_usdc) : "60s";
-  const capMin = duration(params?.max_life_min_ns, "1h");
-  const capMax = duration(params?.max_life_max_ns, "3h");
+  const life = duration(params?.initial_life_ns, "24h");
+  const perUsdc = params ? extensionPerUsdc(params.ext_ns_per_raw_usdc) : "6m";
+  const capMin = duration(params?.max_life_min_ns, "48h");
+  const capMax = duration(params?.max_life_max_ns, "72h");
   const minSeed = params ? formatUsdc(params.min_seed_usdc) : "1";
   const minFeed = params ? formatUsdc(params.min_trade_usdc) : "1";
   const launched = Boolean(mine) || receipts.some((row) => row.kind === "launch" && row.accountId === accountId);
@@ -168,9 +168,9 @@ export function StartGuide() {
         {params ? (
           <p className="hint ok">Those times are read from {config.factoryAccountId}. Timer controls are {params.allow_demo_controls ? "on" : "off"}.</p>
         ) : paramsFailed ? (
-          <p className="hint">The factory view did not load. The times above are the public plan: 30 minutes of life, 60 seconds per USDC, and a 1–3 hour cap, with timer controls off.</p>
+          <p className="hint">The factory view did not load. The times above are the public plan: 24 hours of life, 6 minutes per USDC, and a 48–72 hour cap, with timer controls off.</p>
         ) : (
-          <p className="hint">Times show the public factory plan (30 minutes, 60 seconds per USDC, 1–3 hour cap) until the factory view loads.</p>
+          <p className="hint">Times show the public factory plan (24 hours, 6 minutes per USDC, 48–72 hour cap) until the factory view loads.</p>
         )}
       </div>
 
