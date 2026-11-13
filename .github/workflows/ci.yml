@@ -67,5 +67,5 @@ jobs:
         env:
           NEXT_PUBLIC_NEAR_NETWORK: testnet
           NEXT_PUBLIC_RPC_URL: https://rpc.testnet.near.org
-          NEXT_PUBLIC_FACTORY_ACCOUNT_ID: bowl.nearbowl.testnet
+          NEXT_PUBLIC_FACTORY_ID: pump.nearbowl.testnet
           NEXT_PUBLIC_USDC_ACCOUNT_ID: tusdc.nearbowl.testnet

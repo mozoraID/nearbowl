@@ -374,6 +374,34 @@ a.on-dark { color: #f4f7f8; }
 .feed-list { list-style: none; margin: 12px 0 0; padding: 0; display: grid; gap: 8px; }
 .feed-list a { display: grid; gap: 2px; padding: 10px 12px; border-radius: 16px; background: #f4f7f8; color: inherit; }
 .feed-list span { color: var(--ink-soft); font-size: 0.88rem; }
+.action-row { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 8px; }
+.action-row .solid, .action-row .ghost { width: auto; }
+.empty-hero .action-row { margin-top: 12px; }
+.cycle-costs dl { display: grid; gap: 0; margin: 8px 0 0; }
+.cycle-costs div { display: grid; gap: 2px; padding: 10px 0; border-bottom: 1px solid var(--line); }
+.cycle-costs dt { font-weight: 800; }
+.cycle-costs dd { margin: 0; color: var(--ink-soft); }
+.review { display: grid; gap: 10px; background: #f4f7f8; border-radius: 18px; padding: 12px; }
+.review h3 { margin: 0; }
+.review dl { display: grid; gap: 0; margin: 0; }
+.review div { display: flex; justify-content: space-between; gap: 12px; padding: 7px 0; border-bottom: 1px solid var(--line); }
+.review dt { color: var(--ink-soft); font-size: 0.82rem; font-weight: 700; }
+.review dd { margin: 0; text-align: right; font-weight: 700; }
+.review-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+.trade-links { display: flex; flex-wrap: wrap; gap: 8px 12px; }
+.receipt-wrap { padding-top: 16px; }
+.receipt-card { display: grid; gap: 8px; }
+.receipt-actions { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; margin: 0; }
+.receipt-actions .ghost { min-height: 36px; }
+.factory-status { display: grid; gap: 6px; }
+.footer-kicker { margin: 0; color: var(--mint); font-weight: 800; letter-spacing: 0.04em; text-transform: uppercase; font-size: 0.75rem; }
+.factory-status dl { display: grid; gap: 0; margin: 0; }
+.factory-status div { display: flex; justify-content: space-between; gap: 12px; padding: 6px 0; border-bottom: 1px solid rgba(255, 255, 255, 0.08); }
+.factory-status dt { color: #b7c4cc; font-size: 0.78rem; font-weight: 700; }
+.factory-status dd { margin: 0; text-align: right; font-weight: 700; color: #f4f7f8; }
+.timer-off { color: var(--mint); }
+.timer-on { color: #ffd37a; }
+.nws-modal img.icon { object-fit: contain; background: #f4f7f8; }
 
 .error-card h1, .error-card h3 { color: var(--rose); }
 

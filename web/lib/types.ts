@@ -57,6 +57,16 @@ export type QuoteClaim = {
   status: string;
 };
 
+export type QuoteLaunch = {
+  tokens_out: string;
+  price: string;
+  reserve: string;
+  fee_usdc: string;
+  initial_life_ns: string;
+  creator_haircut_bps: number;
+  min_seed_usdc: string;
+};
+
 export type TradeView = {
   account_id: string;
   side: "buy" | "sell";

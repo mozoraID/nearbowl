@@ -32,11 +32,11 @@ const FAQ = [
   },
   {
     q: "Why is the alive list empty?",
-    a: "A coin leaves the alive list when its timer hits zero. The starting life is read from this factory and shown on the empty state. Launch one, or open a ghost and read how it ended.",
+    a: "A coin leaves the alive list when its timer hits zero. The starting life is read from this factory and shown on the empty state. Launch one, try the cycle on Get started, or open a ghost and read how it ended.",
   },
   {
     q: "How do I get started?",
-    a: "Open Get started, connect a testnet wallet, take 100 tUSDC from the faucet (once a minute), then launch a coin or buy at least 1 tUSDC of one that is still alive.",
+    a: "Open Get started and follow Try one cycle: connect a testnet wallet, take 100 tUSDC from the faucet (once a minute), launch with a 10 tUSDC seed, feed at least 1 tUSDC, then sell while it is alive or claim after the timer hits zero.",
   },
   {
     q: "Can the creator sell the seed?",
@@ -176,6 +176,10 @@ export function Guide({ params }: { params: ParamsView | null }) {
               <div>
                 <dt>Creator haircut</dt>
                 <dd>{params.creator_haircut_bps} bps</dd>
+              </div>
+              <div>
+                <dt>Timer controls</dt>
+                <dd>{params.allow_demo_controls ? "on" : "off"}</dd>
               </div>
             </dl>
           ) : (

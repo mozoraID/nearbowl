@@ -1,6 +1,8 @@
 "use client";
 
+import { FactoryStatus } from "@/components/FactoryStatus";
 import { BowlMark } from "@/components/Pet";
+import { ReceiptBanner, RedirectReceipts } from "@/components/ReceiptBanner";
 import { ToastProvider } from "@/components/Toast";
 import { WalletButton, WalletProvider } from "@/components/Wallet";
 import { config, GITHUB_URL, isTestnet } from "@/lib/config";
@@ -80,7 +82,11 @@ function Frame({ children }: { children: React.ReactNode }) {
           </div>
         </div>
       </header>
-      <main id="main">{children}</main>
+      <main id="main">
+        <RedirectReceipts />
+        <ReceiptBanner />
+        {children}
+      </main>
       <footer className="site-footer">
         <div className="page footer-grid">
           <div>
@@ -109,7 +115,8 @@ function Frame({ children }: { children: React.ReactNode }) {
             <span aria-hidden="true"> · </span>
             <span>{config.network}</span>
           </p>
-          <p className="footer-meta">Not an offer or investment advice.</p>
+          <FactoryStatus />
+          <p className="footer-meta">Not an offer or investment advice. On the public factory, timer controls stay off.</p>
         </div>
       </footer>
       <nav className="tabbar" aria-label="Primary">

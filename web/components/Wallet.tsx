@@ -4,11 +4,70 @@ import "@near-wallet-selector/modal-ui/styles.css";
 import { config } from "@/lib/config";
 import { humanError } from "@/lib/errors";
 import { shortAccount } from "@/lib/format";
-import type { WalletSelector } from "@near-wallet-selector/core";
+import { clearPending, recordOutcome, rememberPending, type TxMeta } from "@/lib/receipts";
+import type { WalletModuleFactory, WalletSelector } from "@near-wallet-selector/core";
 import { actionCreators } from "@near-js/transactions";
 import { createContext, useCallback, useContext, useEffect, useMemo, useState } from "react";
 
 export type TxResult = { txHash?: string };
+
+const LOCAL_ICONS: Record<string, string> = {
+  "hot-wallet": "/wallets/hot.png",
+  "meteor-wallet": "/wallets/meteor.svg",
+  "my-near-wallet": "/wallets/my-near-wallet.svg",
+  "intear-wallet": "/wallets/intear.svg",
+};
+
+function withLocalIcon(factory: WalletModuleFactory, iconUrl: string): WalletModuleFactory {
+  return async (options) => {
+    const mod = await factory(options);
+    if (!mod) return null;
+    mod.metadata.iconUrl = iconUrl;
+    return mod;
+  };
+}
+
+function installWalletIconFallback() {
+  const rewrite = (img: HTMLImageElement) => {
+    if (img.dataset.localFallback === "1") return;
+    const src = img.getAttribute("src") || "";
+    if (!src || src.startsWith("data:") || src.startsWith("/wallets/") || src.startsWith(`${window.location.origin}/wallets/`)) return;
+    const inModal = Boolean(img.closest(".nws-modal"));
+    const remoteHot = /herewallet|hot-labs/i.test(src);
+    if (!inModal && !remoteHot) return;
+    const label = `${img.alt} ${img.parentElement?.textContent ?? ""}`.toLowerCase();
+    const next = label.includes("meteor")
+      ? LOCAL_ICONS["meteor-wallet"]
+      : label.includes("intear")
+        ? LOCAL_ICONS["intear-wallet"]
+        : label.includes("mynear") || label.includes("my near")
+          ? LOCAL_ICONS["my-near-wallet"]
+          : remoteHot || label.includes("hot")
+            ? LOCAL_ICONS["hot-wallet"]
+            : "/wallets/fallback.svg";
+    img.dataset.localFallback = "1";
+    img.src = next;
+  };
+  const onError = (event: Event) => {
+    if (event.target instanceof HTMLImageElement) rewrite(event.target);
+  };
+  const observer = new MutationObserver((records) => {
+    for (const record of records) {
+      const nodes = record.type === "childList" ? Array.from(record.addedNodes) : [record.target];
+      for (const node of nodes) {
+        if (!(node instanceof Element)) continue;
+        if (node instanceof HTMLImageElement) rewrite(node);
+        node.querySelectorAll("img").forEach((img) => rewrite(img));
+      }
+    }
+  });
+  observer.observe(document.body, { subtree: true, childList: true, attributes: true, attributeFilter: ["src"] });
+  window.addEventListener("error", onError, true);
+  return () => {
+    observer.disconnect();
+    window.removeEventListener("error", onError, true);
+  };
+}
 
 export type CallAction = {
   methodName: string;
@@ -22,8 +81,8 @@ type WalletApi = {
   ready: boolean;
   connect: () => void;
   disconnect: () => Promise<void>;
-  call: (receiverId: string, methodName: string, args: object, depositYocto: string, gas?: string) => Promise<TxResult>;
-  callAll: (receiverId: string, actions: CallAction[]) => Promise<TxResult>;
+  call: (receiverId: string, methodName: string, args: object, depositYocto: string, gas?: string, meta?: TxMeta) => Promise<TxResult>;
+  callAll: (receiverId: string, actions: CallAction[], meta?: TxMeta) => Promise<TxResult>;
 };
 
 const WalletContext = createContext<WalletApi | null>(null);
@@ -35,13 +94,30 @@ export function useWallet(): WalletApi {
 }
 
 function readTxHash(result: unknown): string | undefined {
+  if (typeof result === "string" && result.length > 8) return result;
+  if (Array.isArray(result)) {
+    for (const item of result) {
+      const hash = readTxHash(item);
+      if (hash) return hash;
+    }
+    return undefined;
+  }
   if (!result || typeof result !== "object") return undefined;
   const record = result as Record<string, unknown>;
+  if (typeof record.transaction === "string" && record.transaction.length > 0) return record.transaction;
   const direct = hashOf(record.transaction);
   if (direct) return direct;
   if (typeof record.transactionHash === "string" && record.transactionHash.length > 0) return record.transactionHash;
-  if (Array.isArray(record.transactionHashes) && typeof record.transactionHashes[0] === "string") return record.transactionHashes[0];
-  if (Array.isArray(record.transactions)) return hashOf(record.transactions[0]);
+  if (Array.isArray(record.transactionHashes)) {
+    const first = record.transactionHashes.find((item) => typeof item === "string" && item.length > 0);
+    if (typeof first === "string") return first;
+  }
+  const outcome = record.transaction_outcome;
+  if (outcome && typeof outcome === "object") {
+    const id = (outcome as { id?: unknown }).id;
+    if (typeof id === "string" && id.length > 0) return id;
+  }
+  if (Array.isArray(record.transactions)) return readTxHash(record.transactions[0]);
   return undefined;
 }
 
@@ -72,7 +148,12 @@ export function WalletProvider({ children }: { children: React.ReactNode }) {
         ]);
       const next = await setupWalletSelector({
         network: config.network === "mainnet" ? "mainnet" : "testnet",
-        modules: [setupMeteorWallet(), setupMyNearWallet(), setupHotWallet(), setupIntearWallet()],
+        modules: [
+          withLocalIcon(setupMeteorWallet({ iconUrl: LOCAL_ICONS["meteor-wallet"] }), LOCAL_ICONS["meteor-wallet"]),
+          withLocalIcon(setupMyNearWallet({ iconUrl: LOCAL_ICONS["my-near-wallet"] }), LOCAL_ICONS["my-near-wallet"]),
+          withLocalIcon(setupHotWallet() as WalletModuleFactory, LOCAL_ICONS["hot-wallet"]),
+          withLocalIcon(setupIntearWallet({ iconUrl: LOCAL_ICONS["intear-wallet"] }), LOCAL_ICONS["intear-wallet"]),
+        ],
       });
       const ui = setupModal(next, { contractId: config.factoryAccountId });
       const state = next.store.getState();
@@ -91,9 +172,11 @@ export function WalletProvider({ children }: { children: React.ReactNode }) {
       console.error(humanError(err));
       if (!cancelled) setReady(true);
     });
+    const removeFallback = installWalletIconFallback();
     return () => {
       cancelled = true;
       unsubscribe();
+      removeFallback();
     };
   }, []);
 
@@ -105,27 +188,37 @@ export function WalletProvider({ children }: { children: React.ReactNode }) {
   }, [selector]);
 
   const callAll = useCallback(
-    async (receiverId: string, actions: CallAction[]): Promise<TxResult> => {
+    async (receiverId: string, actions: CallAction[], meta?: TxMeta): Promise<TxResult> => {
       if (!selector || !accountId) {
         modal?.show();
         throw new Error("Connect a wallet first.");
       }
-      const wallet = await selector.wallet();
-      const outcome = await wallet.signAndSendTransaction({
-        signerId: accountId,
-        receiverId,
-        actions: actions.map((action) =>
-          actionCreators.functionCall(action.methodName, action.args, BigInt(action.gas ?? "80000000000000"), BigInt(action.depositYocto)),
-        ),
-      });
-      return { txHash: readTxHash(outcome) };
+      if (meta) rememberPending(meta);
+      try {
+        const wallet = await selector.wallet();
+        const outcome = await wallet.signAndSendTransaction({
+          signerId: accountId,
+          receiverId,
+          actions: actions.map((action) =>
+            actionCreators.functionCall(action.methodName, action.args, BigInt(action.gas ?? "80000000000000"), BigInt(action.depositYocto)),
+          ),
+        });
+        const txHash = readTxHash(outcome);
+        const redirected = new URLSearchParams(window.location.search).has("transactionHashes");
+        if (txHash) recordOutcome(txHash, accountId);
+        else if (!redirected) clearPending();
+        return { txHash };
+      } catch (err) {
+        clearPending();
+        throw err;
+      }
     },
     [accountId, modal, selector],
   );
 
   const call = useCallback(
-    async (receiverId: string, methodName: string, args: object, depositYocto: string, gas = "80000000000000") =>
-      callAll(receiverId, [{ methodName, args, depositYocto, gas }]),
+    async (receiverId: string, methodName: string, args: object, depositYocto: string, gas = "80000000000000", meta?: TxMeta) =>
+      callAll(receiverId, [{ methodName, args, depositYocto, gas }], meta),
     [callAll],
   );
 

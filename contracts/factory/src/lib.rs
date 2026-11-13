@@ -772,6 +772,29 @@ impl Contract {
         }
     }
 
+    /// Pure view of a launch. No state is written. The full seed becomes the
+    /// reserve; there is no launch fee. Seed tokens are claim-only, and a
+    /// death claim of those tokens is cut by `creator_haircut_bps`.
+    pub fn quote_launch(&self, usdc_in: U128) -> QuoteLaunch {
+        let amount = usdc_in.0;
+        if amount < self.params.min_seed_usdc {
+            env::panic_str("SeedTooSmall");
+        }
+        let supply = math::seed_supply(amount).unwrap_or_else(|_| env::panic_str("AmountOverflow"));
+        if supply == 0 {
+            env::panic_str("SeedTooSmall");
+        }
+        QuoteLaunch {
+            tokens_out: U128(supply),
+            price: U128(math::price_raw(amount, supply).unwrap_or(0)),
+            reserve: U128(amount),
+            fee_usdc: U128(0),
+            initial_life_ns: U64(self.params.initial_life_ns),
+            creator_haircut_bps: self.params.creator_haircut_bps,
+            min_seed_usdc: U128(self.params.min_seed_usdc),
+        }
+    }
+
     pub fn quote_claim(&self, coin_id: u64, account_id: AccountId) -> QuoteClaim {
         let now = self.now();
         let coin = self
@@ -1784,6 +1807,19 @@ pub struct QuoteClaim {
     pub usdc_out: U128,
     pub haircut: U128,
     pub status: String,
+}
+
+#[near(serializers = [json])]
+#[derive(Clone)]
+pub struct QuoteLaunch {
+    pub tokens_out: U128,
+    pub price: U128,
+    pub reserve: U128,
+    /// Always zero. A launch has no fee; the seed is the pool.
+    pub fee_usdc: U128,
+    pub initial_life_ns: U64,
+    pub creator_haircut_bps: u32,
+    pub min_seed_usdc: U128,
 }
 
 #[near(serializers = [json])]

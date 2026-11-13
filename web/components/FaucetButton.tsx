@@ -83,9 +83,9 @@ export function FaucetButton({ detailed = false }: { detailed?: boolean }) {
                   gas: "40000000000000",
                 },
                 { methodName: "faucet", args: {}, depositYocto: "0", gas: "30000000000000" },
-              ]);
+              ], { kind: "faucet", usdc: "100000000" });
             }
-            return call(config.usdcAccountId, "faucet", {}, "0", "30000000000000");
+            return call(config.usdcAccountId, "faucet", {}, "0", "30000000000000", { kind: "faucet", usdc: "100000000" });
           };
           run()
             .then((result) => {
