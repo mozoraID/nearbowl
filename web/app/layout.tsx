@@ -1,4 +1,5 @@
 import { Shell } from "@/components/Shell";
+import { Analytics } from "@vercel/analytics/next";
 import type { Metadata, Viewport } from "next";
 import { Figtree, Outfit } from "next/font/google";
 import "./globals.css";
@@ -22,6 +23,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
     <html lang="en">
       <body className={`${display.variable} ${body.variable}`}>
         <Shell>{children}</Shell>
+        <Analytics />
       </body>
     </html>
   );
